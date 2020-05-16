@@ -1,0 +1,135 @@
+---
+title: "Chapter 2"
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+header-includes:
+- \usepackage{float}
+- \floatplacement{figure}{H}
+---
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# Setup default environment
+rm(list=ls())
+
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+# knitr::opts_chunk$set(message = FALSE)
+# knitr::opts_chunk$set(warning = FALSE)
+# knitr::opts_chunk$set(out.width = "50%")
+# knitr::opts_chunk$set(fig.align = "center")
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# Additional packages here
+library(rethinking)
+```
+
+```{r}
+# Source R files here
+```
+
+# Globe Tossing Examples
+
+## Grid Approximation
+```{r}
+N <- 20
+p_grid <- seq(0, 1, length.out = N)
+prior <- rep(1, N)
+likelihood <- dbinom(6, size=9, prob=p_grid)
+unstd.posterior <- likelihood * prior
+posterior <- unstd.posterior/sum(unstd.posterior)
+
+data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+  pivot_longer(-x, names_to = "type", values_to = "prob") %>%
+  ggplot(aes(x=x, y=prob, colour=type)) +
+  geom_point() +
+  geom_line() +
+  labs(x="probability of water", y="posterior probability")
+
+```
+
+```{r}
+N <- 20
+p_grid <- seq(0, 1, length.out = N)
+prior <- ifelse(p_grid < 0.5, 0, 1)
+likelihood <- dbinom(6, size=9, prob=p_grid)
+unstd.posterior <- likelihood * prior
+posterior <- unstd.posterior/sum(unstd.posterior)
+
+data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+  pivot_longer(-x, names_to = "type", values_to = "prob") %>%
+  ggplot(aes(x=x, y=prob, colour=type)) +
+  geom_point() +
+  geom_line() +
+  labs(x="probability of water", y="posterior probability")
+```
+```{r}
+N <- 20
+p_grid <- seq(0, 1, length.out = N)
+prior <- exp(-5*abs(p_grid - 0.5))
+likelihood <- dbinom(6, size=9, prob=p_grid)
+unstd.posterior <- likelihood * prior
+posterior <- unstd.posterior/sum(unstd.posterior)
+
+data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+  pivot_longer(-x, names_to = "type", values_to = "prob") %>%
+  ggplot(aes(x=x, y=prob, colour=type)) +
+  geom_point() +
+  geom_line() +
+  labs(x="probability of water", y="posterior probability")
+```
+
+## Quadratic Approximation
+
+```{r}
+globe.qa <- quap(
+  alist(
+    W ~ dbinom(W+L, p),  # binomial likelihood
+    p ~ dunif(0,1)       # uniform prior
+  ),
+  data=list(W=6, L=3))
+
+# display quadratic approximation
+precis(globe.qa)
+
+```
+
+```{r}
+# analytic calculation
+W <- 6
+L <- 3
+curve(dbeta(x, W+1, L+1), from=0, to=1)
+curve(dnorm(x, 0.67, 0.16), lty=2, add=TRUE)
+```
+
+## MCMC
+
+```{r}
+N <- 1000
+p <- rep(NA, N)
+p[1] <- 0.5
+W <- 6
+L <- 3
+for (i in 2:N)
+{
+  p_new <- rnorm(1, p[i-1], 0.1)
+  if (p_new < 0) p_new <- abs(p_new)
+  if (p_new > 1) p_new <- 2 - p_new
+  q0 <- dbinom(W, W+L, p[i-1])
+  q1 <- dbinom(W, W+L, p_new)
+  p[i] <- ifelse(runif(1) < q1/q0, p_new, p[i-1])
+}
+
+dens(p, xlim=c(0,1))
+curve(dbeta(x, W+1, L+1), lty=2, add=TRUE)
+```
+
+
+
+# Practice Problems
