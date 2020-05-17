@@ -1,0 +1,145 @@
+---
+title: "Chapter 3"
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# Setup default environment
+rm(list=ls())
+
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+# knitr::opts_chunk$set(message = FALSE)
+# knitr::opts_chunk$set(warning = FALSE)
+# knitr::opts_chunk$set(out.width = "50%")
+# knitr::opts_chunk$set(fig.align = "center")
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+# Additional packages here
+library(rethinking)
+```
+
+```{r}
+# Source R files here
+```
+
+# Examples
+
+## Sampling from grid approximate posterior
+
+```{r}
+N <- 1000
+p_grid <- seq(0, 1, length.out=N)
+prob_p <- rep(1, N)
+prob_data <- dbinom(6, size=9, prob=p_grid)
+posterior <- prob_data * prob_p
+posterior <- posterior / sum(posterior)
+
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+plot(samples)
+```
+```{r}
+dens(samples)
+```
+
+## Sammpling to summarize
+
+```{r}
+# Probability posterior < 0.5
+sum(posterior[p_grid < 0.5])
+sum(samples < 0.5) / 1e4
+```
+
+```{r}
+# 80% Credible interval - Percentile
+quantile(samples, c(0.1, 0.9))
+```
+
+```{r}
+# Credible interval for highly skewed distribution
+N <- 1000
+p_grid <- seq(0, 1, length.out=N)
+prob_p <- rep(1, N)
+prob_data <- dbinom(3, size=3, prob=p_grid)
+posterior <- prob_data * prob_p
+posterior <- posterior / sum(posterior)
+
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+CI <- PI(samples, 0.5)
+hpdi <- HPDI(samples, 0.5)
+
+plot(p_grid, posterior, type='l')
+abline(v=CI[1], col="blue")
+abline(v=CI[2], col="blue")
+abline(v=hpdi[1], col="red")
+abline(v=hpdi[2], col="red")
+```
+
+```{r}
+# Maximum a posteriori estimate
+p_grid[which.max(posterior)]
+# Mean
+mean(samples)
+# Median
+median(samples)
+```
+
+```{r}
+# Choose absolute value loss function d - p
+# Choose d = 0.5
+sum(posterior*abs(0.5-p_grid))
+
+# Find optimal p_hat
+loss <- sapply(p_grid, function(d) sum(posterior*abs(d-p_grid)))
+p_grid[which.min(loss)]
+```
+
+The median optimizes this loss function.
+
+Two most common loss functions are
+
+1. $|d-p|$ which leads to posterior median
+
+2. $(d-p)^2$ which leads to posterior mean
+
+## Posterior Predictive Distribution
+
+This is how we propogate the model uncertainty as we evaluate the implied predictions.  We do this by averaging over the posterior density for $p$.
+
+
+```{r}
+N <- 1000
+p_grid <- seq(0, 1, length.out=N)
+prob_p <- rep(1, N)
+prob_data <- dbinom(6, size=9, prob=p_grid)
+posterior <- prob_data * prob_p
+posterior <- posterior / sum(posterior)
+
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+```
+
+```{r}
+# predictions with a single value from posterior
+w <- rbinom(1e4, size=9, prob=0.6)
+simplehist(w)
+```
+
+```{r}
+# Posterior predictive distribution
+w <- rbinom(1e4, size=9, prob=samples)
+simplehist(w)
+```
+
+## Other model checks
+
+Our sequence was W L W W W L W L W, so we count the number of switches (6) and the longest run length (3).  Now calculate those same statistics from samples.
+
+
