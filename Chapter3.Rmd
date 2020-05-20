@@ -142,4 +142,121 @@ simplehist(w)
 
 Our sequence was W L W W W L W L W, so we count the number of switches (6) and the longest run length (3).  Now calculate those same statistics from samples.
 
+# Practice Problems
+
+```{r}
+N = 1000
+p_grid <- seq(0, 1, length.out=N)
+prior <- rep(1, N)
+likelihood <- dbinom(6,9, prob=p_grid)
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+set.seed(100)
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+```
+
+
+```{r}
+# 3E1
+sum(samples < 0.2) / 1e4
+```
+
+```{r}
+# 3E2
+
+sum(samples > 0.8) / 1e4
+```
+
+```{r}
+# 3E3
+sum(0.2 <= samples & samples <= 0.8) / 1e4
+```
+
+```{r}
+# 3E4
+quantile(samples, 0.2)
+```
+
+```{r}
+# 3E5
+quantile(samples, 0.8)
+```
+
+```{r}
+# 3E6
+HPDI(samples, 0.66)
+```
+
+```{r}
+# 3E7
+quantile(samples, c(0.17, 0.73))
+```
+
+```{r}
+# 3M1
+
+N = 1000
+p_grid <- seq(0, 1, length.out=N)
+prior <- rep(1, N)
+likelihood <- dbinom(8,15, prob=p_grid)
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+plot(p_grid, posterior, type="l")
+```
+
+```{r}
+# 3M2
+set.seed(100)
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+HPDI(samples, 0.9)
+```
+
+```{r}
+# 3M3
+ppd <- rbinom(1e4, size=15, prob=samples)
+simplehist(ppd)
+sum(ppd == 8)/1e4
+```
+
+```{r}
+# 3M4
+sum(ppd == 6) / 1e4
+```
+
+```{r}
+#3M5
+N = 1000
+p_grid <- seq(0, 1, length.out=N)
+prior <- ifelse(p_grid < 0.5, 0, 1)
+likelihood <- dbinom(8,15, prob=p_grid)
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+plot(p_grid, posterior, type="l")
+
+set.seed(100)
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+HPDI(samples, 0.9)
+
+ppd <- rbinom(1e4, size=15, prob=samples)
+simplehist(ppd)
+sum(ppd == 8)/1e4
+
+sum(ppd == 6) / 1e4
+```
+
+The better prior means greater weight is given to values above 0.5.  The 90% HPDI is narrower and the probability that d=8 is higher.
+
+```{r}
+# 3M6
+N = 1000
+p_grid <- seq(0, 1, length.out=N)
+prior <- ifelse(p_grid < 0.5, 0, 1)
+likelihood <- dbinom(800,1500, prob=p_grid)
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+plot(p_grid, posterior, type="l")
+
+posterior_samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+quantile(posterior_samples, c(0.005, 0.995))
+```
 
