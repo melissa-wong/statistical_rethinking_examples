@@ -1,0 +1,628 @@
+---
+title: "Chapter 4"
+author: "Melissa Wong"
+date: "\today"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# Setup default environment
+rm(list=ls())
+
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+#knitr::opts_chunk$set(fig.align = "center")
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+# Additional packages here
+library(rethinking)
+```
+
+```{r}
+# Source R files here
+```
+
+# Examples
+
+## Gaussian models
+
+```{r}
+data(Howell1)
+str(Howell1)
+precis(Howell1, corr=TRUE)
+# Data for adults only
+d2 <- Howell1[Howell1$age >= 18,]
+dens(d2$height)
+```
+
+```{r}
+# Prior for mu
+curve(dnorm(x, 178, 20), from=100, to=250)
+```
+
+```{r}
+# Prior for sigma
+curve(dunif(x, 0, 50), from=-10, to=60)
+```
+
+### Prior predictive distribution
+
+Checking this _before_ seeing the data is useful and helps choose reasonable priors.  In the case below, the prior predictive heights are postive which makes sense.  This is especially important when we don't have a lot of data because then prior is very influential.
+
+```{r}
+# Prior predictive distribution
+sample_mu <- rnorm(1e4, 178, 20)
+sample_sigma <- runif(1e4, 0, 50)
+prior_h <- rnorm(1e4, sample_mu, sample_sigma)
+dens(prior_h)
+```
+
+Unlike this prior which predicts a not insignificant percentage (4%) of people with negative heights.
+
+```{r}
+sample_mu <- rnorm(1e4, 178, 100)
+prior_h <- rnorm(1e4, sample_mu, sample_sigma)
+dens(prior_h)
+```
+
+### Grid approximation of posterior distribution
+```{r}
+mu.list <- seq(150, 160, length.out = 100)
+sigma.list <- seq(7, 9, length.out=100)
+post <- expand.grid(mu=mu.list, sigma=sigma.list)
+post$LL <- sapply(1:nrow(post), function(i)
+  sum(dnorm(d2$height, post$mu[i], post$sigma[i], log=TRUE)))
+post$prod <- post$LL + dnorm(post$mu, 178, 20, TRUE) + dunif(post$sigma, 0, 50, TRUE)
+post$prob <- exp(post$prod - max(post$prod))
+image_xyz(post$mu, post$sigma, post$prob)
+```
+
+### Sampling from posterior
+
+```{r}
+sample.rows <- sample(1:nrow(post), size=1e4, replace=TRUE, prob=post$prob)
+sample.mu <- post$mu[sample.rows]
+sample.sigma <- post$sigma[sample.rows]
+plot(sample.mu, sample.sigma, cex=0.5, pch=16, col=col.alpha(rangi2, 0.1))
+```
+
+```{r}
+dens(sample.mu)
+dens(sample.sigma)
+```
+
+```{r}
+PI(sample.mu)
+PI(sample.sigma)
+```
+
+### Finding the posterior distribution with _quap_
+
+Our model definition is
+
+\begin{align*}
+  h_i &\sim Normal(\mu, \sigma) \\
+  \mu &\sim Normal(178, 20) \\
+  \sigma &\sim Uniform(0, 50)
+\end{align*}
+
+```{r}
+flist <- alist(
+  height ~ dnorm(mu, sigma),
+  mu ~ dnorm(178, 20),
+  sigma ~ dunif(0,50)
+)
+
+m4.1 <- quap(flist, data=d2)
+
+precis(m4.1)
+```
+
+```{r}
+# With a more informative prior
+m4.2 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ dnorm(178, 0.1),
+    sigma ~ dunif(0, 50)
+  ),
+  data = d2)
+
+precis(m4.2)
+```
+
+```{r}
+# Posterior is multivariate-normal, so check covariance matrix
+vcov(m4.1)
+# Equivalent to think of variances and corrlation matrix
+diag(vcov(m4.1))
+cov2cor(vcov(m4.1))
+```
+
+```{r}
+# Sampling from quap model
+post <- extract.samples(m4.1, n=1e4)
+precis(post)
+# Compare to summary of model
+precis(m4.1)
+```
+```{r}
+plot(post)
+```
+
+## Linear Regression
+
+Now look at a model where _weight_ is the predictor for _height_.
+
+\begin{align*}
+  h_i &\sim Normal(\mu, \sigma) \\
+  \mu_i &\sim \alpha + \beta(x_i - \bar{x}) \\
+  \alpha &\sim Normal(178, 20) \\
+  \beta &\sim Normal(0, 10) \\
+  \sigma &\sim Uniform(0, 50) \\
+\end{align*}
+
+```{r}
+plot(d2$height, d2$weight)
+```
+
+Now let's look at prior predictive distribution
+```{r}
+set.seed(2971)
+N <- 100
+a <- rnorm(N, 178, 20)
+b <- rnorm(N, 0, 10)
+plot(NULL, xlim=range(d2$weight), ylim=c(-100, 400),
+     xlab="weight", ylab="height")
+abline(h=0, lty=2)
+abline(h=272, lty=1, lwd=0.5)
+mtext("b ~ dnorm(0,10)")
+xbar <- mean(d2$weight)
+for(i in 1:N)
+{
+  curve(a[i] + b[i]*(x-xbar),
+        from=min(d2$weight), to=max(d2$weight), add=TRUE,
+        col=col.alpha("black", 0.2))
+}
+
+```
+
+A better model would restrict $\beta$ to postive values.
+
+```{r}
+b <- rlnorm(1e4, 0, 1)
+dens(b, xlim=c(0,5))
+```
+
+```{r}
+set.seed(2971)
+N <- 100
+a <- rnorm(N, 178, 20)
+b <- rlnorm(1e4, 0, 1)
+plot(NULL, xlim=range(d2$weight), ylim=c(-100, 400),
+     xlab="weight", ylab="height")
+abline(h=0, lty=2)
+abline(h=272, lty=1, lwd=0.5)
+mtext("log(b) ~ dnorm(0,1)")
+xbar <- mean(d2$weight)
+for(i in 1:N)
+{
+  curve(a[i] + b[i]*(x-xbar),
+        from=min(d2$weight), to=max(d2$weight), add=TRUE,
+        col=col.alpha("black", 0.2))
+}
+
+```
+
+Now we can fit the model using the observed data.
+
+```{r}
+xbar <- mean(d2$weight)
+m4.3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ a + b*(weight - xbar),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)),
+  data=d2)
+
+precis(m4.3)
+```
+```{r}
+round(vcov(m4.3),3)
+```
+
+Note: the lack of covariance is due to the centering we did with _weight_.
+
+```{r}
+plot(height ~ weight, data=d2, col=rangi2)
+post <- extract.samples(m4.3)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve(a_map + b_map*(x - xbar), add=TRUE)
+```
+
+Above is just one line--the posterior mean; let's plot some additional plausible lines.
+
+```{r}
+N <- 352
+
+mN <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ a + b*(weight - xbar),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)),
+  data=d2[1:N,])
+
+post <- extract.samples(mN, n=20)
+
+plot(d2$weight[1:N], d2$height[1:N],
+     xlim=range(d2$weight), ylim=range(d2$height),
+     col=rangi2, xlab="weight", ylab="height")
+mtext(concat("N=",N))
+
+# Plot 20 lines from the model fit
+for (i in 1:N)
+{
+  curve(post$a[i] + post$b[i] * (x - xbar),
+        col=col.alpha("black", 0.2), add=TRUE)
+}
+```
+
+Now plot plausible intervals for average height (i.e., regression line).
+
+```{r}
+# The following gets 1000 samples from the posterior for each value of weight
+# Each row is a sample from the posterior
+# Each column corresponds to an individual's weight in the orginal data
+mu <- link(m4.3)
+str(mu)
+# Note: explanation of how link works is on p107
+```
+
+```{r}
+# define sequence of weights to compute predictions
+weight.seq <- seq(25, 70, 1)
+mu <- link(m4.3, data=data.frame(weight=weight.seq))
+str(mu)
+
+plot(height ~ weight, d2, type="n")
+for (i in 1:100)
+  points(weight.seq, mu[i,], pch=16, col=col.alpha(rangi2,0.1))
+```
+
+```{r}
+# summarize the distribution of mu at each weight
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+
+plot(height ~ weight, data=d2, col=col.alpha(rangi2, 0.5))
+# Plot the MAP line, aka the mean mu for each weight
+lines(weight.seq, mu.mean)
+# Plot the shaded region of the 89% PI
+shade(mu.PI, weight.seq)
+```
+
+And prediction intervals (this makes use of $\sigma$).
+
+```{r}
+sim.height <- sim(m4.3, data=list(weight=weight.seq))
+str(sim.height)
+```
+```{r}
+height.PI67 <- apply(sim.height, 2, PI, prob=0.67)
+height.PI89 <- apply(sim.height, 2, PI, prob=0.89)
+
+plot(height ~ weight, data=d2, col=col.alpha(rangi2, 0.5))
+# Draw MAP line
+lines(weight.seq, mu.mean)
+# Draw PI region for line
+shade(mu.PI, weight.seq)
+# Draw PI for simulated heights
+shade(height.PI67, weight.seq)
+shade(height.PI89, weight.seq)
+```
+
+## Polynomial Regression
+
+```{r}
+data("Howell1")
+d <- Howell1
+plot(height ~ weight, data=d)
+```
+
+Our model is
+
+\begin{align*}
+  h_i &\sim Normal(\mu_i, \sigma) \\
+  \mu_i &\sim \alpha + \beta_1 x_i + \beta_2 x_i^2 \\
+  \alpha &\sim Normal(178, 20) \\
+  \beta_1 &\sim Log-Normal(0,1) \\
+  \beta_2 &\sim Normal(0,1) \\
+  \sigma &\sim Uniform(0,1) 
+\end{align*}
+
+```{r}
+d$weight_s <- (d$weight - mean(d$weight))/sd(d$weight)
+d$weight_s2 <- d$weight_s^2
+
+m4.5 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b1*weight_s + b2*weight_s2,
+    a ~ dnorm(178, 20),
+    b1 ~ dlnorm(0,1),
+    b2 ~ dnorm(0,1),
+    sigma ~ dunif(0,50)),
+  data=d)
+
+precis(m4.5)
+```
+
+```{r}
+# plot the posterior predictions
+weight.seq <- seq(-2.2, 2, length.out = 30)
+pred_dat <- list(weight_s=weight.seq, weight_s2=weight.seq^2)
+mu <- link(m4.5, data=pred_dat)
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+sim.height <- sim(m4.5, data=pred_dat)
+height.PI <- apply(sim.height, 2, PI, prob=0.89)
+
+plot(height ~ weight_s, data=d , col=col.alpha(rangi2, 0.5))
+lines(weight.seq, mu.mean)
+shade(mu.PI, weight.seq)
+shade(height.PI, weight.seq)
+```
+
+## Splines
+
+```{r}
+data("cherry_blossoms")
+d <- cherry_blossoms
+precis(d)
+plot(doy ~ year, data=d)
+```
+
+```{r}
+d2 <- d[complete.cases(d$doy),]
+num_knots <- 15
+knot_list <- quantile(d2$year, probs=seq(0, 1, length.out = num_knots))
+
+library(splines)
+# Each row of B is a year in d2
+# Each column of B is a basis function
+B <- bs(d2$year,
+        knots=knot_list[-c(1,num_knots)],
+        degree=3, intercept=TRUE)
+```
+
+```{r}
+plot(NULL, xlim=range(d2$year), ylim=c(0,1),
+     xlab="year", ylab="basis")
+for(i in 1:ncol(B))
+  lines(d2$year, B[,i])
+```
+
+```{r}
+m4.7 <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + B %*% w,
+    a ~ dnorm(100,10),
+    w ~ dnorm(0,10),
+    sigma ~ dexp(1)
+  ), data=list(D=d2$doy, B=B),
+  start=list(w=rep(0, ncol(B))))
+
+precis(m4.7, depth=2)
+```
+
+```{r}
+# Plot the weighted basis functions
+post <- extract.samples(m4.7)
+w <- apply(post$w, 2, mean)
+plot(NULL, xlim=range(d2$year), ylim=c(-6, 6),
+     xlab="year", ylab="basis*weight")
+for (i in 1:ncol(B))
+  lines(d2$year, w[i]*B[,i])
+```
+
+```{r}
+# Plot posterior predictions
+mu <- link(m4.7)
+mu_PI <- apply(mu, 2, PI, 0.97)
+plot(d2$year, d2$doy, col=col.alpha(rangi2, 0.3), pch=16)
+shade(mu_PI, d2$year, col=col.alpha("black", 0.5))
+```
+
+# Practice Problems
+
+4E1 $y_i \sim Normal(\mu, \sigma)$ is the likelihood.
+
+4E2 There are two parameters in the posterior distribution, $\mu, \sigma$
+
+4E3 $Pr[\mu, \sigma | y_i] = \frac{Pr[y_i | \mu, \sigma]Pr[\mu]Pr[\sigma]}{\int \int Pr[y_i | \mu, \sigma]Pr[\mu]Pr[\sigma] d\mu d\sigma}$
+
+4E4 $\mu_i = \alpha + \beta x_i$ is the linear model
+
+4E5 There are three parameters in the posterior distribution, $\alpha, \beta, \sigma$
+
+4M1 
+```{r}
+# Model
+mu <- rnorm(1e4, 0, 10)
+plot(density(mu))
+
+sigma <- rexp(1e4)
+plot(density(sigma))
+
+yi <- rnorm(1e4, mean = mu, sd = sigma)
+plot(density(yi), col="blue")
+```
+
+4M2
+\begin{align*}
+    y &\sim dnorm(mu, sigma),
+    mu &\sim dnorm(0, 10),
+    sigma &\sim dexp(1)
+\end{align*}
+
+4M3 
+\begin{align*}
+  y_i &\sim Normal(\mu, \sigma) \\
+  \mu_i &\sim \alpha + \beta x_i \\
+  \alpha &\sim Normal(0, 10) \\
+  \beta &\sim Uniform(0, 1) \\
+  \sigma &\sim Exp(1) 
+\end{align*}
+
+4M4 / 4M5
+```{r}
+N <- 100
+a_samples <- rnorm(N, 100, 30)
+plot(density(a_samples))
+
+sigma_samples <- rexp(N, 0.1)
+plot(density(sigma_samples))
+
+#b_samples <- rlnorm(N, 0, 1)
+b_samples <- runif(N, 0, 20)
+plot(density(b_samples))
+
+plot(NULL, xlim=c(0,4), ylim=c(0, 200),
+     xlab="year", ylab="height")
+xbar <- 2
+for(i in 1:N)
+{
+  curve(a_samples[i] + b_samples[i]*(x-xbar),
+        from=1, to=3, add=TRUE,
+        col=col.alpha("black", 0.2))
+}
+```
+
+4M6
+```{r}
+N <- 100
+a_samples <- rnorm(N, 100, 30)
+plot(density(a_samples))
+
+#sigma_samples <- rexp(N, 0.1)
+sigma_samples <- runif(N, 0, 64)
+plot(density(sigma_samples))
+
+#b_samples <- rlnorm(N, 0, 1)
+b_samples <- runif(N, 0, 20)
+plot(density(b_samples))
+
+plot(NULL, xlim=c(0,4), ylim=c(0, 200),
+     xlab="year", ylab="height")
+xbar <- 2
+for(i in 1:N)
+{
+  curve(a_samples[i] + b_samples[i]*(x-xbar),
+        from=1, to=3, add=TRUE,
+        col=col.alpha("black", 0.2))
+}
+```
+
+4M7
+
+```{r}
+# Data for adults only
+d2 <- Howell1[Howell1$age >= 18,]
+
+set.seed(1)
+m4.3b <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ a + b*(weight),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)),
+  data=d2)
+
+precis(m4.3b)
+```
+
+```{r}
+round(vcov(m4.3b),3)
+```
+
+```{r}
+# posterior prediction
+# define sequence of weights to compute predictions
+weight.seq <- seq(25, 70, 1)
+mu <- link(m4.3b, data=data.frame(weight=weight.seq))
+
+# summarize the distribution of mu at each weight
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+
+plot(height ~ weight, data=d2, col=col.alpha(rangi2, 0.5))
+# Plot the MAP line, aka the mean mu for each weight
+lines(weight.seq, mu.mean)
+# Plot the shaded region of the 89% PI
+shade(mu.PI, weight.seq)
+```
+
+4M8
+
+```{r}
+data("cherry_blossoms")
+d <- cherry_blossoms
+precis(d)
+plot(doy ~ year, data=d)
+```
+
+```{r}
+d2 <- d[complete.cases(d$doy),]
+num_knots <- 20
+knot_list <- quantile(d2$year, probs=seq(0, 1, length.out = num_knots))
+
+library(splines)
+# Each row of B is a year in d2
+# Each column of B is a basis function
+B <- bs(d2$year,
+        knots=knot_list[-c(1,num_knots)],
+        degree=3, intercept=TRUE)
+```
+
+
+```{r}
+m4.7b <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + B %*% w,
+    a ~ dnorm(100,10),
+    w ~ dnorm(0,1),
+    sigma ~ dexp(1)
+  ), data=list(D=d2$doy, B=B),
+  start=list(w=rep(0, ncol(B))))
+
+precis(m4.7b, depth=2)
+```
+
+```{r}
+# Plot posterior predictions
+mu <- link(m4.7b)
+mu_PI <- apply(mu, 2, PI, 0.97)
+plot(d2$year, d2$doy, col=col.alpha(rangi2, 0.3), pch=16)
+shade(mu_PI, d2$year, col=col.alpha("black", 0.5))
+```
+
+Increasing the number of knots and/or the std deviation of the prior for the weights makes the resulting spline more "wiggly".
+
