@@ -1,0 +1,188 @@
+---
+title: "Chapter 6"
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# Setup default environment
+rm(list=ls())
+
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+library(tidyverse)
+```
+
+```{r}
+# Additional packages here
+library(rethinking)
+```
+
+```{r}
+# Source R files here
+```
+
+# Examples
+
+```{r}
+N <- 100
+set.seed(909)
+height <- rnorm(N, 10, 2)
+leg_prop <- runif(N, 0.4, 0.5)
+leg_left <- leg_prop*height + rnorm(N, 0, 0.02)
+leg_right <- leg_prop*height + rnorm(N, 0, 0.02)
+d <- data.frame(height, leg_left, leg_right)
+
+m6.1 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + bl * leg_left +  br * leg_right,
+    a <- dnorm(10, 100),
+    bl <- dnorm(2, 10),
+    br <- dnorm(2, 10),
+    sigma <- dexp(1)
+  ), data=d)
+
+precis(m6.1)
+plot(precis(m6.1))
+```
+
+# Daggity Example
+
+```{r}
+g1 <- dagitty( "dag {
+    H_0 -> H_1
+    H_0 -> T
+    F -> H_1
+    T -> F
+}")
+
+plot(graphLayout(g1))
+```
+
+```{r}
+impliedConditionalIndependencies( g1 )
+```
+
+```{r}
+adjustmentSets(g1, exposure="T", outcome="H_1")
+```
+
+# Simple Model
+
+```{r}
+N <- 1e3
+U <- rnorm(N, 1, 2)
+X <- rnorm(N, 2*U)
+Y <- rnorm(N, -U)
+
+d <- data.frame(U, X, Y, Z = X+Y)
+pairs(d)
+precis(d)
+```
+
+```{r}
+d %>%
+  pivot_longer(cols=everything(), names_to = "var") %>%
+  ggplot() +
+  geom_density(aes(value, colour=var))
+```
+```{r}
+# Standardize
+d1 <- data.frame(X = standardize(d$X),
+                 Y = standardize(d$Y),
+                 Z = standardize(d$Z))
+
+d1 %>%
+  pivot_longer(cols=everything(), names_to = "var") %>%
+  ggplot() +
+  geom_density(aes(value, colour=var))
+
+pairs(d1)
+```
+
+```{r}
+g2 <- dagitty( "dag {
+              X <- U -> Y
+              X -> Z
+              Y -> Z
+              }")
+
+plot(graphLayout(g2))
+```
+
+```{r}
+Xbar <- mean(X)
+
+m1 <- quap(
+  alist(
+    Z ~ dnorm(mu, sigma),
+    mu ~ alpha + beta * X,
+    alpha ~ dnorm(0,1),
+    beta ~ dnorm(0,1),
+    sigma ~ dexp(0.5)
+  ),
+  data=d1)
+
+precis(m1)
+```
+
+```{r}
+Ybar <- mean(Y)
+
+m2 <- quap(
+  alist(
+    Z ~ dnorm(mu, sigma),
+    mu ~ alpha + beta * Y,
+    alpha ~ dnorm(0,1),
+    beta ~ dnorm(0, 1),
+    sigma ~ dexp(0.5)
+  ),
+  data=d1)
+
+precis(m2)
+```
+
+```{r}
+
+m3 <- quap(
+  alist(
+    Z ~ dnorm(mu, sigma),
+    mu ~ alpha + beta1 * X + beta2 * Y,
+    alpha ~ dnorm(0,0.5),
+    beta1 ~ dnorm(0,1),
+    beta2 ~ dnorm(0,1),
+    sigma ~ dexp(1)
+  ),
+  data=d1)
+
+precis(m3)
+```
+
+```{r}
+mdl1 <- lm(Z ~ X + Y, data=d)
+summary(mdl1)
+plot(mdl1)
+```
+
+```{r}
+Z_hat <- fitted(mdl1)
+d$Z_hat <- d$X + d$Y
+plot(d$Z, Z_hat)
+points(d$Z, d$Z_hat, col="red")
+```
+
+```{r}
+predict(mdl1, interval="confidence")
+```
+
+
+
