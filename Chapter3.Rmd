@@ -8,9 +8,6 @@ output:
 ---
 
 ```{r results='hide', message=FALSE, warning=FALSE}
-# Setup default environment
-rm(list=ls())
-
 options("scipen" = 1, "digits" = 4)
 
 #knitr::opts_chunk$set(echo = FALSE)
@@ -25,10 +22,6 @@ library(ggplot2)
 ```{r}
 # Additional packages here
 library(rethinking)
-```
-
-```{r}
-# Source R files here
 ```
 
 # Examples
