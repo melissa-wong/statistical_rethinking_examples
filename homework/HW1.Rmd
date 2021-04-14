@@ -1,0 +1,53 @@
+---
+title: "HW1"
+author: "Melissa Wong"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+# Problem 1
+
+```{r problem1}
+N <- 25
+df1 <- tibble(p = seq(0, 1, length.out=N),
+       prior = rep(1,N)) %>%
+  mutate(likelihood = dbinom(4, 15, p),
+          post = likelihood * prior) 
+df1 %>%
+  ggplot() +
+  geom_line(mapping=aes(x=p, y=prior, color="prior")) +
+  geom_line(mapping=aes(x=p, y=post/sum(post), color="posterior"))
+```
+
+# Problem 2
+
+```{r problem2}
+N <- 25
+df2 <- tibble(p = seq(0, 1, length.out=N)) %>%
+  mutate(prior = ifelse(p<0.5, 0, 1),
+         likelihood = dbinom(4, 15, p),
+          post = likelihood * prior) 
+df2 %>%
+  ggplot() +
+  geom_line(mapping=aes(x=p, y=prior, color="prior")) +
+  geom_line(mapping=aes(x=p, y=post/sum(post), color="posterior"))
+```
+
+This choice of prior effectively means values of $p<0.5$ are not possible.  Since our observed data is $\hat{p} = 4/15 < 0.5$, then it follows that the posterior distribution of $p$ has most of the probability mass concentrated around 0.5 which is the smallest possible value consistent with the prior.
+
+# Problem 3
+
+```{r}
+samples <- sample(df2$p, prob=df2$post/sum(df2$post), 
+                  size=1e4, replace=TRUE)
+rethinking::PI(samples)
+rethinking::HPDI(samples)
+```
+
+The percentile interval is wider because it assumes the distribution is symmetric--which in this case is not true.
