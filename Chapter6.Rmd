@@ -79,7 +79,7 @@ adjustmentSets(g1, exposure="T", outcome="H_1")
 # Simple Model
 
 ```{r}
-N <- 1e3
+N <- 1e2
 U <- rnorm(N, 1, 2)
 X <- rnorm(N, 2*U)
 Y <- rnorm(N, -U)
@@ -119,6 +119,8 @@ g2 <- dagitty( "dag {
 plot(graphLayout(g2))
 ```
 
+## Model 1
+
 ```{r}
 Xbar <- mean(X)
 
@@ -134,6 +136,46 @@ m1 <- quap(
 
 precis(m1)
 ```
+
+```{r}
+# Prior Predictive Distribution
+N <- 20
+prior <- extract.prior(m1)
+
+# Manual
+for (i in 1:N)
+{
+  curve(prior$alpha[i] + prior$beta[i]*x,
+        from=-2, to=2, add=TRUE,
+        col=col.alpha("black", 0.2))
+}
+```
+
+
+```{r}
+# Alternative
+xseq=c(-1,2)
+mu_prior <- link(m1, post=prior, data=list(X=xseq))
+plot(NULL, xlim=xseq, ylim=xseq)
+for(i in 1:N)
+  lines(xseq, mu_prior[i,], col=col.alpha("black", 0.3))
+```
+
+```{r}
+# Posterior Predictive Distribution
+xseq <- seq(min(d1$X), max(d1$X), length.out = N)
+mu_post <- link(m1, data=list(X=xseq))
+mu_est <- colMeans(mu_post)
+mu_sd <- apply(mu_post, 2, sd)
+mu_PI <- apply(mu_post, 2, PI, prob=0.95)
+plot(d1$X, d1$Z, col="blue")
+lines(xseq, mu_est, col="red")
+lines(xseq, mu_est + 2*mu_sd, col="green")
+lines(xseq, mu_est - 2*mu_sd, col="green")
+shade(mu_PI, xseq)
+```
+
+## Model 2
 
 ```{r}
 Ybar <- mean(Y)
@@ -157,32 +199,16 @@ m3 <- quap(
   alist(
     Z ~ dnorm(mu, sigma),
     mu ~ alpha + beta1 * X + beta2 * Y,
-    alpha ~ dnorm(0,0.5),
+    alpha ~ dnorm(0,1),
     beta1 ~ dnorm(0,1),
     beta2 ~ dnorm(0,1),
-    sigma ~ dexp(1)
+    sigma ~ dexp(0.5)
   ),
   data=d1)
-
-precis(m3)
 ```
 
-```{r}
-mdl1 <- lm(Z ~ X + Y, data=d)
-summary(mdl1)
-plot(mdl1)
-```
 
-```{r}
-Z_hat <- fitted(mdl1)
-d$Z_hat <- d$X + d$Y
-plot(d$Z, Z_hat)
-points(d$Z, d$Z_hat, col="red")
-```
 
-```{r}
-predict(mdl1, interval="confidence")
-```
 
 
 
