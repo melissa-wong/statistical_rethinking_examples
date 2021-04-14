@@ -19,12 +19,13 @@ options("scipen" = 1, "digits" = 4)
 # knitr::opts_chunk$set(out.width = "50%")
 # knitr::opts_chunk$set(fig.align = "center")
 library(tidyverse)
-library(ggplot2)
 ```
 
 ```{r results='hide', message=FALSE, warning=FALSE}
 # Additional packages here
 library(rethinking)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 ```
 
 # Globe Tossing Examples

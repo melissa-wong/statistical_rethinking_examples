@@ -21,6 +21,8 @@ library(tidyverse)
 ```{r}
 # Additional packages here
 library(rethinking)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 ```
 
 # Examples
