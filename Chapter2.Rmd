@@ -3,30 +3,24 @@ title: "Chapter 2"
 author: "Melissa Wong"
 date: \today
 output:
-  html_document:
-    df_print: paged
-header-includes:
-- \usepackage{float}
-- \floatplacement{figure}{H}
+  pdf_document: default
 ---
 
 ```{r results='hide', message=FALSE, warning=FALSE}
 options("scipen" = 1, "digits" = 4)
 
-#knitr::opts_chunk$set(echo = FALSE)
-# knitr::opts_chunk$set(message = FALSE)
-# knitr::opts_chunk$set(warning = FALSE)
-# knitr::opts_chunk$set(out.width = "50%")
-# knitr::opts_chunk$set(fig.align = "center")
-library(tidyverse)
-```
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
 
-```{r results='hide', message=FALSE, warning=FALSE}
-# Additional packages here
+library(tidyverse)
+
 library(rethinking)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
+
 
 # Globe Tossing Examples
 

@@ -2,7 +2,9 @@
 title: "HW1"
 author: "Melissa Wong"
 date: "4/14/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, message=FALSE, warning=FALSE}
