@@ -6,7 +6,7 @@ output:
   pdf_document: default
 ---
 
-```{r results='hide', message=FALSE, warning=FALSE}
+```{r setup, message=FALSE, warning=FALSE}
 options("scipen" = 1, "digits" = 4)
 
 knitr::opts_chunk$set(message = FALSE)
@@ -33,7 +33,7 @@ likelihood <- dbinom(6, size=9, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
@@ -50,7 +50,7 @@ likelihood <- dbinom(6, size=9, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
@@ -65,7 +65,7 @@ likelihood <- dbinom(6, size=9, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
@@ -138,7 +138,7 @@ likelihood <- dbinom(3, size=3, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
@@ -155,7 +155,7 @@ likelihood <- dbinom(3, size=4, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
@@ -172,7 +172,7 @@ likelihood <- dbinom(5, size=7, prob=p_grid)
 unstd.posterior <- likelihood * prior
 posterior <- unstd.posterior/sum(unstd.posterior)
 
-data.frame(x = p_grid, prior = prior, posterior=posterior) %>%
+tibble(x = p_grid, prior = prior, posterior=posterior) %>%
   pivot_longer(-x, names_to = "type", values_to = "prob") %>%
   ggplot(aes(x=x, y=prob, colour=type)) +
   geom_point() +
