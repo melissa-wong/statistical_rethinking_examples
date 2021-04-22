@@ -3,6 +3,7 @@ title: "Chapter 3"
 author: "Melissa Wong"
 date: \today
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -16,14 +17,12 @@ options("scipen" = 1, "digits" = 4)
 # knitr::opts_chunk$set(out.width = "50%")
 # knitr::opts_chunk$set(fig.align = "center")
 library(tidyverse)
-```
 
-```{r}
-# Additional packages here
 library(rethinking)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
+
 
 # Examples
 
@@ -138,6 +137,8 @@ Our sequence was W L W W W L W L W, so we count the number of switches (6) and t
 
 # Practice Problems
 
+## Easy Problems
+
 ```{r}
 N = 1000
 p_grid <- seq(0, 1, length.out=N)
@@ -185,6 +186,8 @@ HPDI(samples, 0.66)
 # 3E7
 quantile(samples, c(0.17, 0.73))
 ```
+
+## Medium Problems
 
 ```{r}
 # 3M1
@@ -253,4 +256,68 @@ plot(p_grid, posterior, type="l")
 posterior_samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
 quantile(posterior_samples, c(0.005, 0.995))
 ```
+
+## Hard problems
+
+```{r}
+data(homeworkch3)
+boys <- sum(birth1) + sum(birth2)
+girls <- length(birth1) + length(birth2) - boys
+```
+
+```{r}
+# 3H1
+
+N <- 1000
+p_grid <- seq(0, 1, length.out=N)
+likelihood <- dbinom(boys, boys+girls, prob=p_grid)
+post.unstd <- likelihood * p_grid
+post <- post.unstd/sum(post.unstd)
+plot(p_grid, post, type="l", xlab="Pr[boy]", ylab="density")
+p_grid[which.max(post)]
+```
+
+```{r}
+# 3H2
+samples <- sample(p_grid, 1e4, replace=TRUE, prob=post)
+HPDI(samples, prob=c(0.5, 0.89, 0.97))
+
+```
+```{r}
+# 3H3
+
+# Posterior predictions
+post_pred <- rbinom(1e4, 200, prob=samples)
+dens(post_pred)
+```
+
+The most likely outcome is around 110 boys which is consistent with the observed data of 111 boys.
+
+```{r}
+# 3H4
+# Posterior predictions
+post_pred <- rbinom(1e4, 100, prob=samples)
+dens(post_pred)
+abline(v=sum(birth1))
+HPDI(post_pred, prob=c(0.5, 0.89, 0.97))
+```
+
+The observed value of 51 births is no longer the most likely value of the posterior predictive distribution, but is is still well within the 89% and 97% HPDIs. So this isn't a terrible model, but it could be improved.
+
+```{r}
+# 3H5
+
+# Number of first births that are girls
+girls1 <- sum(birth1 == 0)
+# Number of boys following girl
+boys2 <- sum(birth2[birth1 == 0])
+
+# Posterior predictions
+post_pred <- rbinom(1e4, girls1, prob=samples)
+dens(post_pred)
+abline(v=sum(boys2))
+HPDI(post_pred, prob=c(0.5, 0.89, 0.97))
+```
+
+The observed number of boys (39) is much higher than the most likely value (27) of the posterior predictive distribution.  So the independence assumption does not appear to be valid.  But why?
 
