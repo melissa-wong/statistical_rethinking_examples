@@ -321,3 +321,20 @@ HPDI(post_pred, prob=c(0.5, 0.89, 0.97))
 
 The observed number of boys (39) is much higher than the most likely value (27) of the posterior predictive distribution.  So the independence assumption does not appear to be valid.  But why?
 
+
+```{r}
+# Same analysis but now look at # girls following 1st boy
+
+# Number of first births that are boys
+boys1 <- sum(birth1 == 1)
+# Number of girls following boy
+girls2 <- sum(birth2[birth1 == 1])
+
+# Posterior predictions
+post_pred <- rbinom(1e4, boys1, prob=samples)
+dens(post_pred)
+abline(v=sum(girls2))
+HPDI(post_pred, prob=c(0.5, 0.89, 0.97))
+```
+
+The observed number of girls (21) is much lower than the most likely value (27) of the posterior predictive distribution.  So the independence assumption does not appear to be valid.
