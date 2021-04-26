@@ -73,6 +73,21 @@ summary(mdl2, prob=0.89)
 # Diagnostics
 mcmc_rank_overlay(mdl2)
 pp_check(mdl2)
+
+# Posterior Predictions
+wbar <- attr(df$c_weight, 'scaled:center')
+weight <- c(45, 40, 65, 31)
+
+fitted(mdl2, newdata = data.frame(c_weight = weight - wbar), scale="response", 
+       summary=TRUE, probs=c(0.055, 0.945))
+
+# Equivalent w/tidybayes
+add_fitted_draws(newdata=data.frame(c_weight = weight - wbar), mdl2, value="height") %>%
+  group_by(.row) %>%
+  summarize(expected_height = mean(height),
+            `Q5.5` = quantile(height, 0.055),
+            `Q94.5` = quantile(height, 0.945))
+
 ```
 
 # Problem 2
