@@ -1,0 +1,80 @@
+---
+title: "Homework 2"
+author: "Melissa Wong"
+date: "4/25/2021"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+
+# mc-stan options
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+
+# mean centered weight and height
+data(Howell1)
+
+df <- Howell1[Howell1$age >= 18,]
+df$c_height <- scale(df$height, scale=FALSE)
+df$c_weight <- scale(df$weight, scale=FALSE)
+```
+
+# Problem 1
+
+## Using `rethinking::quap`
+```{r quapmdl}
+mdl1 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b * c_weight,
+    a ~ dnorm(178, 20),
+    b ~ dnorm(0,1),
+    sigma ~ dunif(0, 50)
+  ),
+  data = df
+)
+
+precis(extract.samples(mdl1))
+
+# Predict for following weights
+wbar <- attr(df$c_weight, 'scaled:center')
+weight <- c(45, 40, 65, 31)
+mu <- link(mdl1, data=data.frame(c_weight = weight - wbar ))
+
+# Expected values of height
+cbind(weight, 
+           expected_height = apply(mu, 2, mean),
+           t(apply(mu, 2, PI))) %>%
+  knitr::kable()
+
+```
+
+## Using `brms::brm` 
+
+```{r brmsmdl}
+mdl2 <- brm(height ~ c_weight, data=df, family=gaussian(),
+            prior=c(set_prior("normal(178, 20)", class="Intercept"),
+                    set_prior("normal(0, 1)", class="b", coef = "c_weight"),
+                    # mc-stan has problems converging with uniform prior, use half-cauchy prior instead
+                    set_prior("cauchy(0,1)", class="sigma")))
+
+summary(mdl2, prob=0.89)
+
+# Diagnostics
+mcmc_rank_overlay(mdl2)
+pp_check(mdl2)
+```
+
+# Problem 2
+
+# Problem 3
