@@ -63,27 +63,28 @@ cbind(weight,
 ## Using `brms::brm` 
 
 ```{r brmsmdl}
-mdl2 <- brm(height ~ c_weight, data=df, family=gaussian(),
+mdl1.2 <- brm(height ~ c_weight, data=df, family=gaussian(),
             prior=c(set_prior("normal(178, 20)", class="Intercept"),
                     set_prior("normal(0, 1)", class="b", coef = "c_weight"),
                     # mc-stan has problems converging with uniform prior, use half-cauchy prior instead
                     set_prior("cauchy(0,1)", class="sigma")))
 
-summary(mdl2, prob=0.89)
+summary(mdl1.2, prob=0.89)
 
 # Diagnostics
-mcmc_rank_overlay(mdl2)
-pp_check(mdl2)
+mcmc_rank_overlay(mdl1.2)
+pp_check(mdl1.2)
 
 # Posterior Predictions
 wbar <- attr(df$c_weight, 'scaled:center')
 weight <- c(45, 40, 65, 31)
 
-fitted(mdl2, newdata = data.frame(c_weight = weight - wbar), scale="response", 
+fitted(mdl1.2, newdata = data.frame(c_weight = weight - wbar), scale="response", 
        summary=TRUE, probs=c(0.055, 0.945))
 
 # Equivalent w/tidybayes
-add_fitted_draws(newdata=data.frame(c_weight = weight - wbar), mdl2, value="height") %>%
+add_fitted_draws(newdata=data.frame(c_weight = weight - wbar),
+                 mdl1.2, value="height") %>%
   group_by(.row) %>%
   summarize(expected_height = mean(height),
             `Q5.5` = quantile(height, 0.055),
@@ -102,7 +103,7 @@ ggplot(df) +
 ```{r}
 log_wt_bar <- mean(df$log_wt)
 # Fit linear model
-mdl3 <- quap(
+mdl2 <- quap(
   alist(
     height ~ dnorm(mu, sigma),
     mu <- a + b * (log_wt-log_wt_bar),
@@ -113,15 +114,35 @@ mdl3 <- quap(
   data = df
 )
 
-precis(mdl3)
+precis(mdl2)
 
-mu <- apply(link(mdl3), 2, mean)
+mu <- apply(link(mdl2), 2, mean)
 ggplot(mapping=aes(x=df$log_wt)) +
   geom_point(mapping=aes(y=df$height, color="observed"), alpha=0.5) +
   geom_point(mapping=aes(y=mu, color="predicted"),
              alpha=0.5) +
   # Use colorblind-friendly palette
-  scale_fill_brewer(palette = "Set2")
+  scale_colour_brewer(palette = "Set2")
 ```
 
 # Problem 3
+
+```{r polymdl}
+# Polynomial model
+df <- Howell1
+df$weight_s <- (df$weight - mean(df$weight))/sd(df$weight)
+df$weight_s2 <- df$weight_s^2
+
+mdl3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b1*weight_s + b2*weight_s2,
+    a ~ dnorm(178, 20),
+    b1 ~ dlnorm(0,1),
+    b2 ~ dnorm(0,1),
+    sigma ~ dunif(0,50)),
+  data=df)
+
+precis(mdl3)
+```
+
