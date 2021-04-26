@@ -16,6 +16,7 @@ library(rethinking)
 library(brms)
 library(bayesplot)
 library(tidybayes)
+library(RColorBrewer)
 
 # mc-stan options
 options(mc.cores = parallel::detectCores())
@@ -91,5 +92,36 @@ add_fitted_draws(newdata=data.frame(c_weight = weight - wbar), mdl2, value="heig
 ```
 
 # Problem 2
+
+```{r}
+df <- Howell1
+df$log_wt <- log(df$weight)
+ggplot(df) +
+  geom_point(mapping=aes(x=log_wt, height))
+```
+```{r}
+log_wt_bar <- mean(df$log_wt)
+# Fit linear model
+mdl3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b * (log_wt-log_wt_bar),
+    a ~ dnorm(178, 20),
+    b ~ dnorm(0,25),
+    sigma ~ dunif(0, 50)
+  ),
+  data = df
+)
+
+precis(mdl3)
+
+mu <- apply(link(mdl3), 2, mean)
+ggplot(mapping=aes(x=df$log_wt)) +
+  geom_point(mapping=aes(y=df$height, color="observed"), alpha=0.5) +
+  geom_point(mapping=aes(y=mu, color="predicted"),
+             alpha=0.5) +
+  # Use colorblind-friendly palette
+  scale_fill_brewer(palette = "Set2")
+```
 
 # Problem 3
