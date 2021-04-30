@@ -3,9 +3,9 @@ title: "Homework 2"
 author: "Melissa Wong"
 date: "4/25/2021"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, message=FALSE, warning=FALSE}
@@ -130,19 +130,28 @@ ggplot(mapping=aes(x=df$log_wt)) +
 ```{r polymdl}
 # Polynomial model
 df <- Howell1
-df$weight_s <- (df$weight - mean(df$weight))/sd(df$weight)
-df$weight_s2 <- df$weight_s^2
+summary(df)
 
-mdl3 <- quap(
-  alist(
-    height ~ dnorm(mu, sigma),
-    mu <- a + b1*weight_s + b2*weight_s2,
-    a ~ dnorm(178, 20),
-    b1 ~ dlnorm(0,1),
-    b2 ~ dnorm(0,1),
-    sigma ~ dunif(0,50)),
-  data=df)
+# Plot prior predictive distribution
+N <- 20
+df <- data.frame(
+  a = rnorm(N, 178, 20),
+  b1 = rlnorm(N, 0, 1),
+  b2 = rnorm(N, 0, 1),
+  b3 = rnorm(N, 0, 1)
+)
 
-precis(mdl3)
+wt <- seq(-2, 2, length.out=25)
+df1 <- cbind(df, t(apply(df, 1, function(row) row[1] + row[2] * wt + row[3] * wt^2 + row[4]*wt^3)))
+df1$iteration <- as.factor(1:N)
+
+df1 %>%
+  pivot_longer(cols=-c("a", "b1", "b2", "b3", "iteration"), 
+               values_to = "height",
+               names_to="weight") %>%
+ggplot() +
+  geom_line(mapping=aes(x=as.numeric(weight), y=height,
+                        group=iteration), alpha=0.5)
 ```
 
+The priors from the book yield a reasonable range of prior predictive distributions.
