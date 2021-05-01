@@ -3,9 +3,9 @@ title: "Chapter 4"
 author: "Melissa Wong"
 date: \today
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r results='hide', message=FALSE, warning=FALSE}
@@ -551,7 +551,10 @@ precis(m4.3b)
 
 ```{r}
 round(vcov(m4.3b),3)
+
 ```
+
+The variance for the intercept is much larger, and the covariance between $a, b, \sigma$ is small but larger than the model that included $\bar{x}$.
 
 ```{r}
 # posterior prediction
@@ -616,4 +619,33 @@ shade(mu_PI, d2$year, col=col.alpha("black", 0.5))
 ```
 
 Increasing the number of knots and/or the std deviation of the prior for the weights makes the resulting spline more "wiggly".
+
+4H1
+
+```{r}
+weight <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+wbar <- mean(Howell1$weight)
+
+# Using the adults-only model
+ppd1 <- sim(m4.3, data=list(weight=weight-wbar))
+knitr::kable(cbind(weight,
+                        expected_height=colMeans(ppd1),
+                   t(apply(ppd1, 2, PI))),
+             caption="Adults-only model"
+             )
+```
+
+```{r}
+# All data quadratic model
+wbar <- mean(Howell1$weight)
+wsd <- sd(Howell1$weight)
+weight.seq <- (weight - wbar)/wsd
+ppd1 <- sim(m4.5, data=list(weight_s=weight.seq,
+            weight_s2=weight.seq^2))
+knitr::kable(cbind(weight,
+                        expected_height=colMeans(ppd1),
+                   t(apply(ppd1, 2, PI))),
+             caption="All data quadratic model"
+             )
+```
 
