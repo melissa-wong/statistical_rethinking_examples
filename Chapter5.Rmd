@@ -67,3 +67,24 @@ fixef(mdl1)
 fixef(mdl2)
 fixef(mdl3)
 ```
+
+5M3. Higher divorce rates would also cause a higher rate of 2nd/3rd/etc. marriages.  So if we conditioned on rate of  re-marriages (or 1st marriages), then we could evaluate the effects of divorce rate and re-marriage rate on the overall marriage rate. 
+
+5M4.
+
+```{r}
+mormon <- readRDS("Data_5M4.rds") %>%
+  mutate(percent = as.numeric(sub("%","",Percent))) %>%
+  select(-Percent)
+
+data(WaffleDivorce)
+divorce <- WaffleDivorce %>%
+  select(Location, Loc, Marriage, 
+         Divorce, MedianAgeMarriage) %>%
+  left_join(mormon, by=c("Location" = "State")) %>%
+  # standardize numeric variables
+  mutate_if(is.numeric, scale)
+
+```
+
+
