@@ -85,6 +85,141 @@ divorce <- WaffleDivorce %>%
   # standardize numeric variables
   mutate_if(is.numeric, scale)
 
+# Define model
+mdl5.4 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 * Marriage + b2 * MedianAgeMarriage + b3 * percent,
+    a ~ dnorm(0, 0.2),
+    b1 ~ dnorm(0, 0.5),
+    b2 ~ dnorm(0, 0.5),
+    b3 ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = divorce
+)
+
+precis(mdl5.4)
 ```
 
+```{r}
+mu <- apply(link(mdl5.4), 2, mean)
+ggplot(mapping=aes(x=mu, y=divorce$Divorce,
+                         label=divorce$Loc)) +
+  geom_text(color="blue") +
+  geom_abline(mapping=aes(intercept=0, slope=1), 
+                          linetype="dashed")
+```
+5M5.
+
+```{r}
+dag5M5 <- dagitty('dag{
+  GasPrice -> Driving -> EatingOut -> Obesity
+  GasPrice -> Driving -> Exercise -> Obesity
+}')
+
+plot(graphLayout(dag5M5))
+```
+
+If we have the predictors `Driving`, `EatingOut` and `Exercise` and we include all three in our model, then we can estimate the individual effects of the `EatingOut` and `Exercise` paths on Obesity.
+
+5H1.
+
+```{r}
+dag5H1 <- dagitty('dag{
+                  M -> A -> D
+}')
+
+print( impliedConditionalIndependencies(dag5H1))
+```
+
+```{r}
+# Define model
+mdl5H1 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 * Marriage + b2 * MedianAgeMarriage,
+    a ~ dnorm(0, 0.2),
+    b1 ~ dnorm(0, 0.5),
+    b2 ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = divorce
+)
+
+precis(mdl5H1)
+```
+
+The 89% credible interval for `b1` includes 0 which is consistent with the model that Divorce and Marriage rates are independent conditional on MedianAgeMarriage.
+
+5H2. 
+
+```{r}
+ppd <- sim(mdl5H1)
+
+# Define sequence with 1/2 marriage rate
+simdat <- data.frame(Marriage = divorce$Marriage/2)
+# Simulate counterfactual data
+scf <- sim(mdl5H1, data=simdat, 
+         vars=c("MedianAgeMarriage", "Divorce"))
+
+ggplot() +
+  geom_text(mapping=aes(x=simdat$Marriage,
+                        y=colMeans(scf$Divorce),
+                        label=divorce$Loc,
+                        color="Counterfactual")) +
+  geom_text(mapping=aes(x=divorce$Marriage,
+                        y=colMeans(ppd),
+                        label=divorce$Loc,
+                        color="Predicted"))
+  labs(x="Marriage Rate",
+       y="Divorce Rate")
+```
+5H3.
+
+```{r}
+data(milk)
+
+df <- milk %>%
+  filter(complete.cases(.)) %>%
+  mutate(K = scale(kcal.per.g),
+         N = scale(neocortex.perc),
+         M = scale(log(mass)))
+
+mdl5H3 <- quap(
+  alist(
+    ## M -> K <- N
+    K ~ dnorm(mu, sigma),
+    mu <- a + bN*N + bM*M,
+    a ~ dnorm(0, 0.2),
+    bN ~ dnorm(0, 0.5),
+    bM ~ dnorm(0, 0.5),
+    sigma ~ dexp(1),
+    ## M -> N
+    N ~ dnorm(muN, sigmaN),
+    muN <- aN + bNM * M,
+    aN ~ dnorm(0, 0.2),
+    bNM ~ dnorm(0, 0.05),
+    sigmaN ~ dexp(1)
+  ),
+  data = df
+)
+
+ppd <- sim(mdl5H3)
+
+# Create manipulated values of M
+simdat <- data.frame(M = df$M*2)
+# Simulate counterfactual data
+scf <- sim(mdl5H3, data=simdat, 
+         vars=c("N", "K"))
+
+ggplot() +
+  geom_point(mapping=aes(x=simdat$M,
+                        y=colMeans(scf$K),
+                        color="Counterfactual")) +
+  geom_point(mapping=aes(x=df$M,
+                        y=colMeans(ppd),
+                        color="Predicted")) +
+  labs(x="log Body Mass", y="kcal per g")
+```
 
