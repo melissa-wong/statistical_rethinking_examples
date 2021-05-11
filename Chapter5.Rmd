@@ -1,19 +1,114 @@
 ---
 title: "Chapter5"
 author: "Melissa Wong"
-date: \today
-output: html_document
+date: "\today"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
-```{r results='hide', message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE}
 options("scipen" = 1, "digits" = 4)
 
 library(tidyverse)
 library(dagitty)
-library(brms)
 library(rethinking)
+library(brms)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
+```
+
+# Chapter Exercises
+
+## Simulate Counterfactual
+
+```{r}
+data("WaffleDivorce")
+d <- list()
+d$A <- standardize(WaffleDivorce$MedianAgeMarriage)
+d$D <- standardize(WaffleDivorce$Divorce)
+d$M <- standardize(WaffleDivorce$Marriage)
+
+m5.3_A <- quap(
+  alist(
+    ## A -> D <- M
+    D ~ dnorm(mu, sigma),
+    mu <- a + bM * M + bA*A,
+    a ~ dnorm(0, 0.2),
+    bM ~ dnorm(0, 0.5),
+    bA ~ dnorm(0, 0.5),
+    sigma ~ dexp(1),
+    ## A -> M
+    M ~ dnorm(mu_M, sigma_M),
+    mu_M <- aM + bAM * A,
+    aM ~ dnorm(0, 0.2),
+    bAM ~ dnorm(0, 0.5),
+    sigma_M ~ dexp(1)
+  ), data=d
+)
+
+precis(m5.3_A)
+```
+
+```{r}
+
+A_seq <- seq(-2, 2, length.out=30)
+
+sim_dat <- data.frame(A = A_seq)
+
+s <- sim(m5.3_A, data=sim_dat, vars=c("M", "D"))
+s_LB <- quantile(s$M, probs = c(0.025, 0.975))
+
+df <- data.frame(A_seq = A_seq,
+           s_mean = colMeans(s$M),
+           s_LB = apply(s$M, 2, quantile, probs=c(0.025)),
+           s_UB = apply(s$M, 2, quantile, probs=0.975))
+
+df %>%
+ggplot(mapping=aes(x=A_seq, y=s_mean)) +
+  geom_line() +
+  geom_ribbon(mapping=aes(ymin=s_LB, ymax=s_UB), alpha=0.2)
+  
+```
+
+## Equivalent in `brms`
+
+```{r}
+# Replicate with brms
+
+f1 <- bf(D ~ M + A) + bf(M ~ A) + set_rescor(FALSE)
+
+#get_prior(f1, data=d)
+
+new_priors <- c(# Priors for D ~ M + A
+                 set_prior("normal(0,0.2)", class="Intercept", resp="D"),
+                 set_prior("normal(0,0.5)", class="b", resp="D"),
+                 set_prior("exponential(1)", class="sigma", resp="D"),
+                 # Priors for M ~ A
+                 set_prior("normal(0,0.2)", class="Intercept", resp="M"),
+                 set_prior("normal(0,0.05)", class="b", resp="M"),
+                 set_prior("exponential(1)", class="sigma", resp="M"))
+
+#make_stancode(f1, prior=new_priors, data=df)
+
+m5.3_B <- brm(f1, prior=new_priors, data=d)
+
+#prior_summary(mdl5H3_b)
+
+summary(m5.3_B)
+```
+```{r}
+
+simdata <- data.frame(A = seq(-2, 2, length.out=30))
+# Simulate counterfactual
+scfM <- predict(m5.3_B, newdata = simdata, resp="M")
+simdata$M <- scfM[,1]
+scf <- predict(m5.3_B, newdata = simdata, resp="D")
+
+cbind(simdata, scf) %>%
+  ggplot(mapping=aes(x=A, y=Estimate)) +
+  geom_line() +
+  geom_ribbon(mapping=aes(ymin=`Q2.5`, ymax=`Q97.5`), alpha=0.2)
 ```
 
 # Practice Problems
@@ -28,7 +123,7 @@ rstan_options(auto_write = TRUE)
 
 5M1.  
 
-```{r results="hide", message=FALSE}
+```{r eval=FALSE}
 N <-50
 df <- tibble(
   x_real = rnorm(N, 0, 1),
@@ -39,9 +134,7 @@ df <- tibble(
 mdl1 <- brm(y ~ x_spur, data=df)
 mdl2 <- brm(y ~ x_real, data=df)
 mdl3 <- brm(y ~ x_real + x_spur, data=df)
-```
 
-```{r}
 fixef(mdl1)
 fixef(mdl2)
 fixef(mdl3)
@@ -49,7 +142,7 @@ fixef(mdl3)
 
 5M2.
 
-```{r results="hide", message=FALSE}
+```{r eval=FALSE}
 N <-50
 df <- tibble(
   x_real = rnorm(N, 0, 1),
@@ -57,12 +150,12 @@ df <- tibble(
   y = rnorm(N, x_real - x_spur, 1)
 )
 
+pairs(df)
+
 mdl1 <- brm(y ~ x_spur, data=df)
 mdl2 <- brm(y ~ x_real, data=df)
 mdl3 <- brm(y ~ x_real + x_spur, data=df)
-```
 
-```{r}
 fixef(mdl1)
 fixef(mdl2)
 fixef(mdl3)
@@ -175,7 +268,10 @@ ggplot() +
   labs(x="Marriage Rate",
        y="Divorce Rate")
 ```
+
 5H3.
+
+Counterfactual simulation using `quap`
 
 ```{r}
 data(milk)
@@ -199,12 +295,17 @@ mdl5H3 <- quap(
     N ~ dnorm(muN, sigmaN),
     muN <- aN + bNM * M,
     aN ~ dnorm(0, 0.2),
-    bNM ~ dnorm(0, 0.05),
+    bNM ~ dnorm(0, 0.5),
     sigmaN ~ dexp(1)
   ),
   data = df
 )
 
+precis(mdl5H3)
+```
+
+```{r}
+# Posterior Predictive Distribution
 ppd <- sim(mdl5H3)
 
 # Create manipulated values of M
@@ -220,6 +321,62 @@ ggplot() +
   geom_point(mapping=aes(x=df$M,
                         y=colMeans(ppd),
                         color="Predicted")) +
+  labs(x="log Body Mass", y="kcal per g")
+```
+
+Counterfactual simulation with `brm`
+
+```{r}
+# Replicate with brms
+
+f1 <- bf(K ~ M + N) + bf(N ~ M) + set_rescor(FALSE)
+
+get_prior(f1, data=df)
+
+new_priors <- c(# Priors for K ~ M + N
+                 set_prior("normal(0,0.2)", class="Intercept", resp="K"),
+                 set_prior("normal(0,0.5)", class="b", resp="K"),
+                 set_prior("exponential(1)", class="sigma", resp="K"),
+                 # Priors for N ~ M
+                 set_prior("normal(0,0.2)", class="Intercept", resp="N"),
+                 set_prior("normal(0,0.05)", class="b", resp="N"),
+                 set_prior("exponential(1)", class="sigma", resp="N"))
+
+#make_stancode(f1, prior=new_priors, data=df)
+
+mdl5H3_b <- brm(f1, prior=new_priors, data=df)
+
+#prior_summary(mdl5H3_b)
+
+print(mdl5H3_b)
+```
+
+```{r}
+
+ppd <- predict(mdl5H3_b, resp="K")
+
+# Create manipulated values of M
+simdata <- data.frame(M = df$M*2,
+                     N = df$N)
+
+# Simulate counterfactual
+scf <- predict(mdl5H3_b, newdata = simdata, resp="K")
+# Does this give same result?
+scfN <- predict(mdl5H3_b, newdata = simdata, resp="N")
+simdata$N <- scfN[,1]
+scfK <- predict(mdl5H3_b, newdata = simdata, resp="K")
+
+
+ggplot() +
+  geom_point(mapping=aes(x=simdat$M,
+                        y=scf[,1],
+                        color="Counterfactual1")) +
+  # geom_point(mapping=aes(x=df$M,
+  #                       y=ppd[,1],
+  #                       color="Predicted")) +
+  geom_point(mapping=aes(x=simdat$M,
+                        y=scfK[,1],
+                        color="Counterfactual2")) +
   labs(x="log Body Mass", y="kcal per g")
 ```
 
