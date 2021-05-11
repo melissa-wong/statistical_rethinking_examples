@@ -1,7 +1,7 @@
 ---
 title: "Chapter5"
 author: "Melissa Wong"
-date: "\today"
+date: \today
 output:
   pdf_document: default
   html_document: default
@@ -301,27 +301,35 @@ mdl5H3 <- quap(
   data = df
 )
 
-precis(mdl5H3)
 ```
 
 ```{r}
 # Posterior Predictive Distribution
 ppd <- sim(mdl5H3)
 
-# Create manipulated values of M
-simdat <- data.frame(M = df$M*2)
-# Simulate counterfactual data
-scf <- sim(mdl5H3, data=simdat, 
-         vars=c("N", "K"))
+ppd_df <- data.frame(
+  Estimate = colMeans(ppd),
+  `Q2.5` = apply(ppd, 2, quantile, probs=0.025),
+  `Q97.5` = apply(ppd, 2, quantile, probs=0.975),
+  x = df$M,
+  method="quap",
+  type="Predicted"
+)
 
-ggplot() +
-  geom_point(mapping=aes(x=simdat$M,
-                        y=colMeans(scf$K),
-                        color="Counterfactual")) +
-  geom_point(mapping=aes(x=df$M,
-                        y=colMeans(ppd),
-                        color="Predicted")) +
-  labs(x="log Body Mass", y="kcal per g")
+# Create manipulated values of M
+simdata <- data.frame(M = df$M*2)
+# Simulate counterfactual data
+scf <- sim(mdl5H3, data=simdata, 
+         vars=c("N", "K"))
+scf_df <- data.frame(
+  Estimate = colMeans(scf$K),
+  `Q2.5` = apply(scf$K, 2, quantile, probs=0.025),
+  `Q97.5` = apply(scf$K, 2, quantile, probs=0.975),
+  x = simdata$M,
+  method="quap",
+  type="Counterfactual"
+)
+
 ```
 
 Counterfactual simulation with `brm`
@@ -331,7 +339,7 @@ Counterfactual simulation with `brm`
 
 f1 <- bf(K ~ M + N) + bf(N ~ M) + set_rescor(FALSE)
 
-get_prior(f1, data=df)
+# get_prior(f1, data=df)
 
 new_priors <- c(# Priors for K ~ M + N
                  set_prior("normal(0,0.2)", class="Intercept", resp="K"),
@@ -339,44 +347,56 @@ new_priors <- c(# Priors for K ~ M + N
                  set_prior("exponential(1)", class="sigma", resp="K"),
                  # Priors for N ~ M
                  set_prior("normal(0,0.2)", class="Intercept", resp="N"),
-                 set_prior("normal(0,0.05)", class="b", resp="N"),
+                 set_prior("normal(0,0.5)", class="b", resp="N"),
                  set_prior("exponential(1)", class="sigma", resp="N"))
 
 #make_stancode(f1, prior=new_priors, data=df)
 
-mdl5H3_b <- brm(f1, prior=new_priors, data=df)
+mdl5H3_b <- brm(f1, prior=new_priors, data=df,
+                file="mdl5H3_b", file_refit = "on_change")
 
 #prior_summary(mdl5H3_b)
-
-print(mdl5H3_b)
 ```
+Compare results
+
+```{r}
+precis(mdl5H3, prob=0.95)
+
+summary(mdl5H3_b)
+```
+
+The posterior estimates are very close for the two models, though variances for `brm` fit tend to be slightly higher.
 
 ```{r}
 
-ppd <- predict(mdl5H3_b, resp="K")
+ppd_b <- as.data.frame(predict(mdl5H3_b, resp="K")) %>%
+  select(-Est.Error) %>%
+  mutate(x = df$M,
+         method="brms", 
+         type="Predicted")
 
 # Create manipulated values of M
-simdata <- data.frame(M = df$M*2,
-                     N = df$N)
+simdata <- data.frame(M = df$M*2)
 
 # Simulate counterfactual
-scf <- predict(mdl5H3_b, newdata = simdata, resp="K")
-# Does this give same result?
-scfN <- predict(mdl5H3_b, newdata = simdata, resp="N")
-simdata$N <- scfN[,1]
-scfK <- predict(mdl5H3_b, newdata = simdata, resp="K")
+scfN_b <- predict(mdl5H3_b, newdata = simdata, resp="N")
+simdata$N <- scfN_b[,1]
+scf_b <- as.data.frame(predict(mdl5H3_b, newdata = simdata, resp="K")) %>%
+  select(-Est.Error) %>%
+  mutate(x=simdata$M,
+         method="brms", 
+         type="Counterfactual")
 
-
-ggplot() +
-  geom_point(mapping=aes(x=simdat$M,
-                        y=scf[,1],
-                        color="Counterfactual1")) +
-  # geom_point(mapping=aes(x=df$M,
-  #                       y=ppd[,1],
-  #                       color="Predicted")) +
-  geom_point(mapping=aes(x=simdat$M,
-                        y=scfK[,1],
-                        color="Counterfactual2")) +
+rbind(
+  ppd_df,
+  scf_df,
+  ppd_b,
+  scf_b
+) %>%
+ggplot(mapping=aes(x=x, y=Estimate)) +
+  geom_point() +
+  geom_errorbar(mapping=aes(ymin=`Q2.5`, ymax=`Q97.5`)) +
+  geom_point(data=df, mapping=aes(x=M, y=K, color="Observed")) +
+  facet_grid(type ~ method) +
   labs(x="log Body Mass", y="kcal per g")
 ```
-
