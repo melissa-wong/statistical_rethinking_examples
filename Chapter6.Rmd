@@ -5,6 +5,7 @@ date: \today
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r results='hide', message=FALSE, warning=FALSE}
@@ -52,6 +53,39 @@ Berkson's paradox is an example of collider bias.
 4. Descendant: X -> Z <- Y and Z -> D (X is not associated with Y unless conditioning on D)
 
 ## 6M1
+
+```{r}
+dag_6M1 <- dagitty("dag{ 
+                  U [unobserved]
+                  V [unobserved]
+                  X -> Y
+                  X <- U <- A -> C -> Y
+                  U -> B <- C
+                  C <- V -> Y
+}")
+
+plot(graphLayout(dag_6M1))
+```
+
+There are 5 paths from X to Y:
+
+X - Y (open)
+
+X - U - B - C - Y (closed because of B)
+
+X - U - B - C - V - Y (closed because of B)
+
+X - U - A - C - Y (open)
+
+X - U - A _ C - V - Y (open)
+
+We need to close the last two paths by conditioning on A.
+
+```{r}
+# Confirm
+adjustmentSets(dag_6M1, exposure="X", outcome="Y")
+```
+
 
 
 
