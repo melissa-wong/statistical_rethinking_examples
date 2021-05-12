@@ -1,0 +1,65 @@
+---
+title: "HW3"
+author: "Melissa Wong"
+date: \today
+output: pdf_document
+---
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+library(dagitty)
+library(brms)
+library(RColorBrewer)
+
+# mc-stan options
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+# Setup
+
+```{r}
+data(foxes)
+
+df <- foxes %>%
+  mutate(across(avgfood:weight, scale))
+
+dag_fox <- dagitty('dag{
+  area -> avgfood
+  avgfood -> groupsize
+  avgfood -> weight <- groupsize
+}')
+
+plot(graphLayout(dag_fox))
+
+impliedConditionalIndependencies(dag_fox)
+```
+
+# Problem 1
+
+To get the total causal effect of area on weight, simply regress weight on area.
+
+```{r}
+# Confirm no adjustment needed
+adjustmentSets(dag_fox, exposure="area", outcome="weight")
+```
+
+```{r}
+# Choose priors
+# Fit model
+mdl_fox <- quap(
+  alist(
+    # area -> weight
+    weight ~ dnorm(mu_weight, sigma_weight),
+    mu_weight <- a + b * area,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma_weight ~ dexp(1)
+  ), data=df
+)
+
+precis(mdl_fox)
+```
+
