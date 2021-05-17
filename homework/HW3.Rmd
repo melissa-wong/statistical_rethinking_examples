@@ -62,4 +62,45 @@ mdl_fox <- quap(
 
 precis(mdl_fox)
 ```
+# Problem 2
+
+```{r}
+mdl2 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b * avgfood,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+precis(mdl2)
+```
+
+We don't need to condition on any variables to get the total causal effect of _avgfood_ on _weight_. Similarly, while the MAP estimate is slightly negative the 89% credible interal includes 0 so it does not appear there is any causal relationship between _avgfood_ and _weight_.
+
+# Problem 3
+
+```{r}
+mdl3 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b1 * groupsize + b2 * avgfood,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+precis(mdl3)
+```
+
+We need to condition on _avgfood_ to correctly estimate the causal effect of _groupsize_.  Now the MAP estimate is -0.69 and the 89% credible interval is strictly negative, so increasing _groupsize_ would decrease _weight_.
+
+Now the causal effect of _avgfood_ is positive.  Since there are two forward paths from _avgfood_ to _weight_, this suggests the the positive effect through _groupsize_ is essentially negated by the direct effect on _weight_.  In other words, the net effect of changing _avgfood_ is zero.
+
 

@@ -3,9 +3,9 @@ title: "Chapter 6"
 author: "Melissa Wong"
 date: \today
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r results='hide', message=FALSE, warning=FALSE}
@@ -86,9 +86,271 @@ We need to close the last two paths by conditioning on A.
 adjustmentSets(dag_6M1, exposure="X", outcome="Y")
 ```
 
+# 6M2
+
+```{r}
+N <- 100
+df <- data.frame(
+  x <- rnorm(N),
+  z <- 2*x + rnorm(N, 0, 0.5),
+  y <- rnorm(N, z)
+)
+pairs(df)
+
+mdl_6M2 <- quap(
+  alist(
+    y ~ dnorm(mu, sigma),
+    mu <- a + b1 * x + b2 * z,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+plot(precis(mdl_6M2))
+```
+
+This model does not exhibit multicollinearity.  Instead, what we can deduce from the plot above is that once we know $z$, knowing $x$ doesn't provide additional information about $y$.  This is consistent with our DAG $X \to Z \to Y$ that $x$ affects $y$ through $z$.
+
+# 6M3
+
+```{r include=FALSE}
+dag_6M3 <- dagitty("dag{ 
+                  X -> Y
+                  X <- Z -> Y
+                  Z <- A -> Y
+}")
+
+plot(graphLayout(dag_6M3))
+
+adjustmentSets(dag_6M3, exposure="X", outcome="Y")
+```
 
 
+Upper left: condition on Z
+
+Upper right: No need to condition for total causal effect
+
+Bottom left: condition on Z and A
+
+Bottom right: condition on A
+
+# 6H1
+
+```{r}
+data("WaffleDivorce")
+
+df <- WaffleDivorce %>%
+  select(Loc, South, WaffleHouses, MedianAgeMarriage, Marriage, Divorce) %>%
+  mutate(across(WaffleHouses:Divorce, scale))
+
+dag_6H1 <- dagitty("dag{ 
+                   WaffleHouses <- South -> MedianAge
+                   South -> Marriage
+                   MedianAge -> Marriage
+                   MedianAge -> Divorce
+                   Marriage -> Divorce
+                   }")
+
+plot(graphLayout(dag_6H1))
+
+adjustmentSets(dag_6H1, exposure="WaffleHouses", outcome="Divorce")
+```
+
+```{r}
+mdl1 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 *  WaffleHouses + b2 * South,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl1))
+```
+
+The 89% credible interval includes 0 for the effect of WaffleHouses.  However, the estimates for the intercept and both coefficients are all quite wide intervals suggesting this model isn't a great fit to the data.
+
+# 6H2
+
+Check if data is consistent with conditional independencies implied by the model
+
+```{r}
+impliedConditionalIndependencies(dag_6H1)
+```
 
 
+```{r}
+mdl1 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 *  South + b2 * Marriage + b3 * MedianAgeMarriage,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    b3 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl1))
+```
+
+Not consistent with the data, so try the following model instead.
+
+```{r}
+data("WaffleDivorce")
+
+df <- WaffleDivorce %>%
+  select(Loc, South, WaffleHouses, MedianAgeMarriage, Marriage, Divorce) %>%
+  mutate(across(WaffleHouses:Divorce, scale))
+
+dag_6H1b <- dagitty("dag{ 
+                   WaffleHouses <- South -> MedianAge
+                   South -> Marriage
+                   South -> Divorce
+                   MedianAge -> Marriage
+                   MedianAge -> Divorce
+                   }")
+
+plot(graphLayout(dag_6H1b))
+
+impliedConditionalIndependencies(dag_6H1b)
+```
+
+```{r}
+mdl1 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 * Marriage + b2 * MedianAgeMarriage + b3 * South,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    b3 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl1))
+```
+```{r}
+mdl2 <- quap(
+  alist(
+    Divorce ~ dnorm(mu, sigma),
+    mu <- a + b1 * South + b2 * WaffleHouses,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl2))
+```
+```{r}
+mdl3 <- quap(
+  alist(
+    Marriage ~ dnorm(mu, sigma),
+    mu <- a + b1 * South + b2 * WaffleHouses,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl3))
+```
+```{r}
+mdl4 <- quap(
+  alist(
+    MedianAgeMarriage ~ dnorm(mu, sigma),
+    mu <- a + b1 * South + b2 * WaffleHouses,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+plot(precis(mdl4))
+```
+
+This 2nd DAG isn't quite right either unfortunately. There are likely other unobserved variables that should be in the model (maybe percentage of different religions?).
+
+# 6H3
+
+```{r}
+data(foxes)
+
+df <- foxes %>%
+  mutate(across(avgfood:weight, scale))
+
+mdl_6H3 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b * area,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+precis(mdl_6H3)
+```
+The MAP estimate for total causal effect is very slightly positive, but the 89% credible interval includes 0 so we really can't say there is a causal effect of area on weight.
+
+# 6H4
+
+```{r}
+mdl_6H4 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b * avgfood,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+precis(mdl_6H4)
+```
+
+We don't need to condition on any variables to get the total causal effect of _avgfood_ on _weight_. Similarly, while the MAP estimate is slightly negative the 89% credible interal includes 0 so it does not appear there is any causal relationship between _avgfood_ and _weight_.
+
+# 6H5
+
+```{r}
+mdl_6H5 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b1 * groupsize + b2 * avgfood,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+precis(mdl_6H5)
+```
+
+We need to condition on _avgfood_ to correctly estimate the causal effect of _groupsize_.  Now the MAP estimate is -0.69 and the 89% credible interval is strictly negative, so increasing _groupsize_ would decrease _weight_.
+
+Now the causal effect of _avgfood_ is positive.  Since there are two forward paths from _avgfood_ to _weight_, this suggests the the positive effect through _groupsize_ is essentially negated by the direct effect on _weight_.  In other words, the net effect of changing _avgfood_ is zero.
 
 
