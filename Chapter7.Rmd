@@ -1,0 +1,61 @@
+---
+title: Chapter 7
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+```
+
+
+# 7E1
+
+1. The measure of uncertainty should be continuous.
+
+2. The measure of uncertainty should increase as the number of possible events increases.
+
+3. The measure of uncertainty should be additive.
+
+# 7E2
+
+```{r}
+p_coin <- c(0.5, 0.5)
+(entropy <- -sum(p_coin * log(p_coin)))
+```
+
+# 7E3
+
+```{r}
+p_die <- c(0.2, 0.25, 0.25, 0.3)
+(entropy <- -sum(p_die * log(p_die)))
+```
+
+# 7E4
+
+```{r}
+p_die <- c(1/3, 1/3, 1/3)
+(entropy <- -sum(p_die * log(p_die)))
+```
+
