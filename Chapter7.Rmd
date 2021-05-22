@@ -127,3 +127,153 @@ See 7M4 explanation.
 # 7M6
 
 See 7M4 explanation.
+
+# 7H1
+
+```{r}
+data(Laffer)
+
+df <- Laffer %>% mutate_if(is.numeric, scale)
+df %>% ggplot() + geom_point(mapping=aes(x=tax_rate, y=tax_revenue))
+```
+
+```{r}
+# Fit linear model
+
+mdl_lin <- quap(
+  alist(
+    tax_revenue ~ dnorm(mu, sigma),
+    mu <- a + b * tax_rate,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+data.frame(tax_rate = df$tax_rate,
+                  ypred = t(link(mdl_lin, n=10))) %>% pivot_longer(cols=-tax_rate, names_to="iter",
+                     values_to="ypred") %>%
+  ggplot() +
+  geom_line(mapping=aes(x=tax_rate, y=ypred, 
+                        group=iter), alpha=0.2) +
+  geom_point(data=df, mapping=aes(x=tax_rate, y=tax_revenue)) +
+  labs(title="Linear Model", x="tax_rate", y="tax_revenue") 
+  
+```
+
+```{r}
+# Fit quadratic
+
+df$tax_rate2 <- df$tax_rate^2
+
+mdl_quad <- quap(
+  alist(
+    tax_revenue ~ dnorm(mu, sigma),
+    mu <- a + b1 * tax_rate + b2 * tax_rate2,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+data.frame(tax_rate = df$tax_rate,
+                  ypred = t(link(mdl_quad, n=10))) %>% pivot_longer(cols=-tax_rate, names_to="iter",
+                     values_to="ypred") %>%
+  ggplot() +
+  geom_line(mapping=aes(x=tax_rate, y=ypred, 
+                        group=iter), alpha=0.2) +
+  geom_point(data=df, mapping=aes(x=tax_rate, y=tax_revenue)) +
+  labs(title="Linear Model", x="tax_rate", y="tax_revenue") 
+  
+```
+
+```{r}
+compare(mdl_lin, mdl_quad, func=WAIC)
+compare(mdl_lin, mdl_quad, func=PSIS)
+```
+
+The standard error for the difference is >> than the difference for both WAIC and PSIS.  Thus we really can't distinguish between the two models (i.e., adding the quadratic term does not significanty improve the fit).
+
+# 7H2
+
+```{r}
+# Linear model
+data.frame(waic = WAIC(mdl_lin, pointwise = TRUE)$penalty,
+           psis = PSIS(mdl_lin, pointwise = TRUE)$k) %>%
+  ggplot() +
+  geom_point(mapping=aes(x=psis, y=waic))
+```
+```{r}
+# Quadratic Model
+
+data.frame(waic = WAIC(mdl_quad, pointwise = TRUE)$penalty,
+           psis = PSIS(mdl_quad, pointwise = TRUE)$k) %>%
+  ggplot() +
+  geom_point(mapping=aes(x=psis, y=waic))
+```
+
+Refit models with student-t distribution
+
+```{r}
+mdl_lin_t <- quap(
+  alist(
+    tax_revenue ~ dstudent(2, mu, sigma),
+    mu <- a + b * tax_rate,
+    a ~ dnorm(0, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+data.frame(tax_rate = df$tax_rate,
+                  ypred = t(link(mdl_lin_t, n=10))) %>% pivot_longer(cols=-tax_rate, names_to="iter",
+                     values_to="ypred") %>%
+  ggplot() +
+  geom_line(mapping=aes(x=tax_rate, y=ypred, 
+                        group=iter), alpha=0.2) +
+  geom_point(data=df, mapping=aes(x=tax_rate, y=tax_revenue)) +
+  labs(title="Linear Model", x="tax_rate", y="tax_revenue") 
+  
+data.frame(waic = WAIC(mdl_lin_t, pointwise = TRUE)$penalty,
+           psis = PSIS(mdl_lin_t, pointwise = TRUE)$k) %>%
+  ggplot() +
+  geom_point(mapping=aes(x=psis, y=waic))
+```
+
+```{r}
+mdl_quad_t <- quap(
+  alist(
+    tax_revenue ~ dstudent(2, mu, sigma),
+    mu <- a + b1 * tax_rate + b2 * tax_rate2,
+    a ~ dnorm(0, 1),
+    b1 ~ dnorm(0, 1),
+    b2 ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = df
+)
+
+data.frame(tax_rate = df$tax_rate,
+                  ypred = t(link(mdl_quad_t, n=10))) %>% pivot_longer(cols=-tax_rate, names_to="iter",
+                     values_to="ypred") %>%
+  ggplot() +
+  geom_line(mapping=aes(x=tax_rate, y=ypred, 
+                        group=iter), alpha=0.2) +
+  geom_point(data=df, mapping=aes(x=tax_rate, y=tax_revenue)) +
+  labs(title="Linear Model", x="tax_rate", y="tax_revenue") 
+  
+data.frame(waic = WAIC(mdl_quad_t, pointwise = TRUE)$penalty,
+           psis = PSIS(mdl_quad_t, pointwise = TRUE)$k) %>%
+  ggplot() +
+  geom_point(mapping=aes(x=psis, y=waic))
+```
+# 7H3
+
+# 7H4
+
+# 7H5
+
