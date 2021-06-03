@@ -3,9 +3,9 @@ title: Chapter 8
 author: "Melissa Wong"
 date: \today
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
@@ -75,7 +75,8 @@ data(tulips)
 df <- tulips %>%
   mutate(blooms_std = blooms/max(blooms),
          water_cent = water - mean(water),
-         shade_cent = shade - mean(shade))
+         shade_cent = shade - mean(shade),
+         bed = as.factor(bed))
   
 mdl8m4 <- quap(
   alist(
@@ -111,4 +112,210 @@ cbind(grid, t(blooms_pred)) %>%
 
 ```
 
+# 8H1
 
+```{r}
+
+# Interaction model w/bed as predictor
+ m8H1 <- quap(
+   alist(
+     blooms_std ~ dnorm(mu, sigma),
+     mu <- a[bed] + bw[bed]*water_cent + bs[bed]*shade_cent + 
+       bws[bed] * water_cent * shade_cent,
+     a[bed] ~ dnorm(0.5, 0.25),
+     bw[bed] ~ dnorm(0, 0.25),
+     bs[bed] ~ dnorm(0, 0.25),
+     bws[bed] ~ dnorm(0, 0.25),
+     sigma ~ dexp(1)
+   ),
+   data=df
+ )
+ 
+ precis(m8H1, depth=2)
+ 
+```
+# 8H2
+
+```{r}
+# Interaction model p256
+ m8.5 <- quap(
+   alist(
+     blooms_std ~ dnorm(mu, sigma),
+     mu <- a + bw*water_cent + bs*shade_cent + bws * water_cent * shade_cent,
+     a ~ dnorm(0.5, 0.25),
+     bw ~ dnorm(0, 0.25),
+     bs ~ dnorm(0, 0.25),
+     bws ~ dnorm(0, 0.25),
+     sigma ~ dexp(1)
+   ),
+   data=df
+ )
+
+precis(m8.5)
+```
+
+```{r fig.height=10}
+ compare(m8.5, m8H1)
+ plot(coeftab(m8.5, m8H1))
+```
+
+The standard error for the difference is >> than the difference in WAIC between the two models; therefore adding _bed_ as a predictor doesn't significantly improve the model fit. Looking at the posterior distributions for the coefficients, there is significant overlap for _bs_, _bw_ and _bws_ for the three beds (i.e., we can't say the slopes differ significantly based on _bed_). The intercept for _bed_1_ is the only term whose 95% credible interval doesn't overlap at all with the intercepts for the other two beds; so the effect is _bed_1_ has slightly lower blooms, but not enough to significantly improve the model's predictions.
+
+# 8M3
+
+## Part a
+
+```{r}
+data(rugged)
+
+df <- rugged %>%
+  select(c(rgdppc_2000, rugged, cont_africa, country)) %>%
+  mutate(log_gdp = log(rgdppc_2000)) %>%
+  filter(complete.cases(.)) %>%
+  mutate(log_gdp_std = log_gdp/mean(log_gdp),
+         rugged_std = rugged/max(rugged),
+         cid = ifelse(cont_africa == 1, 1, 2))
+
+df %>%
+  ggplot(mapping=aes(x=rugged_std, y=log_gdp_std)) +
+  geom_point() +
+  geom_text(aes(label=ifelse(log_gdp_std > 1.0 & rugged_std > 0.5,
+                              as.character(country), ''))) +
+  facet_wrap(vars(cid), labeller = label_both)
+```
+
+```{r}
+m8.3 <- quap(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dnorm(0, 0.3),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+precis(m8.3, depth=2)
+```
+
+
+```{r}
+df %>%
+  mutate(waic = WAIC(m8.3, pointwise = TRUE)$penalty,
+           psis = PSIS(m8.3, pointwise = TRUE)$k) %>%
+  ggplot(mapping=aes(x=psis, y=waic)) +
+  geom_point() +
+  geom_text(aes(label=ifelse(waic > 0.5 & psis > 0.5,
+                              as.character(country), ''))) +
+  facet_wrap(vars(cid), labeller = label_both)
+```
+According to the plot above, none of the countries are overly influential (i.e., none have very large WAIC and/or PSIS values).
+
+## Part b
+
+```{r}
+m8.3b <- quap(
+  alist(
+    log_gdp_std ~ dstudent(2, mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dnorm(0, 0.3),
+    sigma ~ dexp(1)
+  ),
+  data=df
+)
+
+precis(m8.3b, depth=2)
+```
+
+```{r}
+plot(coeftab(m8.3, m8.3b))
+```
+
+There is not a substantial change in the results.
+
+# 8H4
+
+```{r}
+data(nettle)
+
+df <- nettle %>%
+  mutate(log.lang.per.cap = log(num.lang / k.pop),
+         log.area = log(area))
+
+summary(df)
+
+df %>%
+  ggplot() +
+  geom_point(mapping=aes(y=log.lang.per.cap, x=mean.growing.season))
+```
+
+## Part a
+
+```{r}
+mdl8H4a <- quap(
+  alist(
+    log.lang.per.cap ~ dnorm(mu, sigma),
+    mu <- a + bm * mean.growing.season + ba * log.area,
+    a ~ dnorm(-5, 3),
+    bm ~ dnorm(0, 2),
+    ba ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), 
+  data=df
+)
+
+# Prior predictive distribution
+precis(mdl8H4a, prob=0.89)
+```
+The 89% credible interval for _bm_ is positive and doesn't include zero, so this is consistent with the hypothesis that _mean.growing.season_ is positively associated with the number of languages. 
+
+## Part b
+
+```{r}
+mdl8H4b <- quap(
+  alist(
+    log.lang.per.cap ~ dnorm(mu, sigma),
+    mu <- a +  bg * sd.growing.season + ba * log.area,
+    a ~ dnorm(-5, 3),
+    bg ~ dnorm(0, 2),
+    ba ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), 
+  data=df
+)
+
+# Prior predictive distribution
+precis(mdl8H4b)
+```
+
+The 89% credible interval for _bg_ includes zero, so we can't conclude anything about the association between _sd.growing.season_ and language diversity.
+
+## Part c
+
+```{r}
+mdl8H4c <- quap(
+  alist(
+    log.lang.per.cap ~ dnorm(mu, sigma),
+    mu <- a + bm * mean.growing.season + bg * sd.growing.season + 
+      bgm * mean.growing.season * sd.growing.season  + ba * log.area,
+    a ~ dnorm(-5, 3),
+    bm ~ dnorm(0, 2),
+    bg ~ dunif(0, 2),
+    bgm ~ dnorm(0, 2),
+    ba ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), 
+  data=df
+)
+
+# Prior predictive distribution
+precis(mdl8H4c)
+```
+
+Including both terms and the interaction, now we conclude the following:
+
+* _mean.growing.season_ is positively associated with language diversity
+
+* the interaction between _mean.growing.season_ and _sd.growing.season_ is negatively associated with language diversity.
