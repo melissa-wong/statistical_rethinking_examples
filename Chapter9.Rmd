@@ -1,0 +1,72 @@
+---
+title: Chapter 8
+author: "Melissa Wong"
+date: \today
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+library(rethinking)
+library(brms)
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+```
+
+# 9E1
+
+3. The simple Metropolis algorithm requires that the proposal distribution must be symmetric.
+
+# 9E2
+
+Gibbs sampling requires that the conditional distribution of each variable is known, and samples are drawn in succession from each conditional distribution.  This is more efficient than Metropolis sampling when it can be used, but is limited to problems with conjugate priors.
+
+# 9E3 
+
+HMC doesn't inherently work for discrete parameters because it needs a continuous surface upon which to simulate the path of the particle (which determines where to sample). HMC requires some modifications to work with discrete parameters.
+
+# 9E4
+
+Typically the samples in a Markov Chain are correlated.  So _n_eff_ is equivalent to the number of independent samples.
+
+# 9E5
+
+_Rhat_ should approach 1 when the chain is sampling correctly from the posterior.
+
+# 9E6
+
+The three characteristics of a "healthy" trace plot are:
+
+1. Good mixing - each chain rapidly explores the parameter space rather than getting "stuck" near one value and changing slowly.
+
+2. Convergence - the chains converge to approximately the same value.
+
+3. Stationarity - the mean of each chain is relatively stable.
+
+# 9E7
+
+The characteristics of a "healthy" trace rank plot are:
+
+1. The ranks for each chain should be approximately uniform.
+
+2. The chains should mostly overlap.
+
+# 9M1
+
