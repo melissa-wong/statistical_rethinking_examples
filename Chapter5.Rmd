@@ -78,7 +78,7 @@ ggplot(mapping=aes(x=A_seq, y=s_mean)) +
 
 f1 <- bf(D ~ M + A) + bf(M ~ A) + set_rescor(FALSE)
 
-#get_prior(f1, data=d)
+get_prior(f1, data=d)
 
 new_priors <- c(# Priors for D ~ M + A
                  set_prior("normal(0,0.2)", class="Intercept", resp="D"),
@@ -337,6 +337,7 @@ Counterfactual simulation with `brm`
 ```{r}
 # Replicate with brms
 
+# rescor=FALSE means do not model residual correlation between response vars
 f1 <- bf(K ~ M + N) + bf(N ~ M) + set_rescor(FALSE)
 
 # get_prior(f1, data=df)
