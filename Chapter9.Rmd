@@ -1,5 +1,5 @@
 ---
-title: Chapter 8
+title: Chapter 9
 author: "Melissa Wong"
 date: \today
 output:
@@ -69,4 +69,44 @@ The characteristics of a "healthy" trace rank plot are:
 2. The chains should mostly overlap.
 
 # 9M1
+
+```{r}
+data(rugged)
+
+df <- rugged %>%
+  drop_na(rgdppc_2000) %>%
+  transmute(log_gdp = log(rgdppc_2000),
+         rugged_std = rugged / max(rugged),
+         cid = ifelse(cont_africa==1, "Africa", "Not_Africa")) %>%
+  mutate(log_gdp_std = log_gdp / mean(log_gdp))
+
+# Define formula
+# Below is an MLM which is not correct
+# f <- bf(log_gdp_std ~ 1|cid + rugged_std|cid)
+# See https://bookdown.org/content/4857/markov-chain-monte-carlo.html#easy-hmc-ulam-brm
+f <- bf(
+  log_gdp_std ~ 0 + c + r * (rugged_std - 0.215),
+  c ~ 0 + cid,
+  r ~ 0 + cid,
+  nl=TRUE
+)
+
+# Check default priors
+get_prior(f, data=df)
+
+m9H1 <- brm(formula=f, data=df,
+            prior = c(
+              # Note: use coef="cidAfrica"/"cidNot_Africa" if want to specify
+              # different priors for each intercept
+              # Same prior for both intercepts
+              set_prior("normal(0, 0.1)", class="b", nlpar="c"),
+              # Same prior for both slopes
+              set_prior("normal(0, 0.3)", class="b", nlpar="r"),
+              set_prior("exponential(1)", class="sigma")
+            ),
+            #file="m9H1", file_refit = "on_change",
+            chains=1, cores=1)
+
+summary(m9H1)
+```
 
