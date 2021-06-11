@@ -3,9 +3,9 @@ title: Chapter 9
 author: "Melissa Wong"
 date: \today
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
@@ -85,28 +85,124 @@ df <- rugged %>%
 # f <- bf(log_gdp_std ~ 1|cid + rugged_std|cid)
 # See https://bookdown.org/content/4857/markov-chain-monte-carlo.html#easy-hmc-ulam-brm
 f <- bf(
-  log_gdp_std ~ 0 + c + r * (rugged_std - 0.215),
-  c ~ 0 + cid,
-  r ~ 0 + cid,
+  log_gdp_std ~ 0 + a + b * (rugged_std - 0.215),
+  a ~ 0 + cid,
+  b ~ 0 + cid,
   nl=TRUE
 )
 
 # Check default priors
 get_prior(f, data=df)
 
-m9H1 <- brm(formula=f, data=df,
+m9M1 <- brm(formula=f, data=df,
             prior = c(
               # Note: use coef="cidAfrica"/"cidNot_Africa" if want to specify
               # different priors for each intercept
               # Same prior for both intercepts
-              set_prior("normal(0, 0.1)", class="b", nlpar="c"),
+              set_prior("normal(0, 0.1)", class="b", nlpar="a"),
               # Same prior for both slopes
-              set_prior("normal(0, 0.3)", class="b", nlpar="r"),
-              set_prior("exponential(1)", class="sigma")
+              set_prior("normal(0, 0.3)", class="b", nlpar="b"),
+              #set_prior("exponential(1)", class="sigma")
+              set_prior("uniform(0,1)", class="sigma")
             ),
-            #file="m9H1", file_refit = "on_change",
+            file="m9M1", file_refit = "on_change",
             chains=1, cores=1)
 
-summary(m9H1)
+summary(m9M1)
 ```
+```{r}
+
+df_ulam <- df %>%
+  select(log_gdp_std, rugged_std, cid) %>%
+  mutate(cid = ifelse(cid=="Africa", 1, 2))
+
+m9.1 <- ulam(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dnorm(0, 0.3),
+    sigma ~ dunif(0,1)
+  ),
+  data=df_ulam, chains=1, cores=1
+)
+
+precis(m9.1, depth=2)
+```
+
+```{r}
+# Extract the stan code from the brms model
+stancode(m9M1)
+# How does it compare to the stan code from the ulam model?
+cat(m9.1@model)
+```
+
+# 9M2
+
+
+```{r}
+
+m9M2 <- brm(formula=f, data=df,
+            prior = c(
+              # Note: use coef="cidAfrica"/"cidNot_Africa" if want to specify
+              # different priors for each intercept
+              # Same prior for both intercepts
+              set_prior("normal(0, 0.1)", class="b", nlpar="a"),
+              # Same prior for both slopes
+              # set_prior("normal(0, 0.3)", class="b", nlpar="b"),
+              set_prior("exponential(0.3)", class="b", nlpar="b", lb=0),
+              set_prior("exponential(1)", class="sigma")
+            ),
+            file="m9M2", file_refit = "on_change",
+            chains=1, cores=1)
+
+summary(m9M2)
+```
+
+```{r}
+stancode(m9M2)
+```
+
+
+```{r}
+
+df_ulam <- df %>%
+  select(log_gdp_std, rugged_std, cid) %>%
+  mutate(cid = ifelse(cid=="Africa", 1, 2))
+
+m9.1 <- ulam(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dexp(0.3),
+    sigma ~ dexp(1)
+  ),
+  data=df_ulam, chains=1, cores=1
+)
+
+precis(m9.1, depth=2)
+```
+
+# 9H1
+
+```{r}
+mp <- ulam(
+  alist(
+    a ~ dnorm(0,1),
+    b ~ dcauchy(0,1)
+  ), data=list(y=1), chains=1
+)
+
+precis(mp)
+
+traceplot(mp)
+
+pairs(mp)
+```
+This model is simply attempting to fit the Normal and Cauchy distributions. The mean and the variance for the Cauchy distribution are both undefined, which means that the parameters space for _b_ is completely unrestricted.  The _pairs_ plot illustrates how the MCMC samples are pretty evenly distributed over the posterior distribution for _a_; however the samples are mostly concentrated around the center of _b_'s distribution and very sparsely in the tails.  There just isn't enough information to get a reasonable estimate of _b_'s posterior distribution.
+
+# 9H2
+
+# 9H3
 
