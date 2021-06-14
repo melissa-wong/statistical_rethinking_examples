@@ -198,11 +198,188 @@ precis(mp)
 
 traceplot(mp)
 
-pairs(mp)
+pairs(mp@stanfit)
 ```
 This model is simply attempting to fit the Normal and Cauchy distributions. The mean and the variance for the Cauchy distribution are both undefined, which means that the parameters space for _b_ is completely unrestricted.  The _pairs_ plot illustrates how the MCMC samples are pretty evenly distributed over the posterior distribution for _a_; however the samples are mostly concentrated around the center of _b_'s distribution and very sparsely in the tails.  There just isn't enough information to get a reasonable estimate of _b_'s posterior distribution.
 
 # 9H2
 
+```{r}
+data("WaffleDivorce")
+
+df <- WaffleDivorce %>%
+  transmute(D = scale(Divorce),
+         M = scale(Marriage),
+         A = scale(MedianAgeMarriage))
+
+```
+
+## `rethinking`
+
+```{r}
+m5.1 <- ulam(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bA * A,
+    a ~ dnorm(0, 0.2),
+    bA ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  log_lik = TRUE,
+  chains=1, cores=1
+)
+
+m5.2 <- ulam(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bM * M,
+    a ~ dnorm(0, 0.2),
+    bM ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  log_lik = TRUE,
+  chains=1, cores=1
+)
+
+m5.3 <- ulam(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + bA * A + bM * M,
+    a ~ dnorm(0, 0.2),
+    bA ~ dnorm(0, 0.5),
+    bM ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  log_lik = TRUE,
+  chains=1, cores=1
+)
+```
+
+```{r}
+compare(m5.1, m5.2, m5.3)
+
+compare(m5.1, m5.2, m5.3, func=PSIS)
+```
+
+## `brms`
+
+```{r}
+
+m5.1 <- brm(
+  formula = D ~ A,
+  data = df,
+  prior = c(
+    set_prior("normal(0, 0.2)", class="Intercept"),
+    set_prior("normal(0, 0.5)", class="b"),
+    set_prior("exponential(1)", class="sigma")
+  ),
+  file="m9H2a", file_refit = "on_change",
+  chains=1, cores=1
+)
+# Add WAIC and PSIS to model
+m5.1 <- add_criterion(m5.1, criterion = c("loo", "waic"))
+
+m5.2 <- brm(
+  formula = D ~ M,
+  data = df,
+  prior = c(
+    set_prior("normal(0, 0.2)", class="Intercept"),
+    set_prior("normal(0, 0.5)", class="b")
+  ),
+  file="m9H2b", file_refit = "on_change",
+  chains=1, cores=1
+)
+# Add WAIC and PSIS to model
+m5.2 <- add_criterion(m5.2, criterion = c("loo", "waic"))
+
+m5.3 <- brm(
+  formula = D ~ M + A,
+  data = df,
+  prior = c(
+    set_prior("normal(0, 0.2)", class="Intercept"),
+    set_prior("normal(0, 0.5)", class="b")
+  ),
+  file="m9H2c", file_refit = "on_change",
+  chains=1, cores=1
+)
+# Add WAIC and PSIS to model
+m5.3 <- add_criterion(m5.3, criterion = c("loo", "waic"))
+```
+
+```{r}
+# Compare using WAIC
+loo_compare(m5.1, m5.2, m5.3, criterion = "waic") %>% 
+  print(simplify=FALSE) %>% 
+  knitr::kable()
+
+# Compare using PSIS
+loo_compare(m5.1, m5.2, m5.3, criterion = "loo") %>% 
+  print(simplify=FALSE) %>%
+  knitr::kable()
+```
+
 # 9H3
+
+```{r}
+N <- 100
+set.seed(909)
+height <- rnorm(N, 10, 2)
+leg_prop <- runif(N, 0.4, 0.5)
+left_leg <- leg_prop * height + rnorm(N, 0, 0.02)
+right_leg <- leg_prop * height + rnorm(N, 0, 0.02)
+
+d <- data.frame(height, right_leg, left_leg)
+
+m5.8s <- ulam(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + bl * left_leg + br * right_leg,
+    a ~ dnorm(10, 100),
+    bl ~ dnorm(2, 10),
+    br ~ dnorm(2, 10),
+    sigma ~ dexp(1)
+  ),
+  data=d, chains=4,
+  start=list(a=10, bl=0, br=0.1, sigma=1),
+  log_lik = TRUE
+)
+
+m5.8s2 <-ulam(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + bl * left_leg + br * right_leg,
+    a ~ dnorm(10, 100),
+    bl ~ dnorm(2, 10),
+    br ~ dnorm(2, 10),
+    sigma ~ dexp(1)
+  ),
+  data=d, chains=4,
+  constraints=list(br="lower=0"),
+  start=list(a=10, bl=0, br=0.1, sigma=1),
+  log_lik = TRUE
+)
+```
+
+
+```{r}
+plot(precis(m5.8s))
+
+plot(precis(m5.8s2))
+```
+
+Once `br` is constrained to be positive, then the coefficients of `m5.8s2` tell us that `bl` doesn't give any significant info about `height`.  
+
+# 9H4
+
+```{r}
+compare(m5.8s, m5.8s2, func=WAIC)
+```
+The two models are effectively the same with regards to predictive accuracy. `m5.8s2` has fewer effective parameters (`pWAIC=2.8`); this can be attributed to the more informative prior resulting in a model less likely to overfit.
+
+
+
+
 
