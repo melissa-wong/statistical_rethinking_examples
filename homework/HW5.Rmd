@@ -1,0 +1,86 @@
+---
+title: Assignment 5
+author: "Melissa Wong"
+date: \today
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+library(rethinking)
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+```
+
+# Problem 1
+
+```{r}
+data(Wines2012)
+
+df <- Wines2012 %>%
+  select(score, judge, wine) %>%
+  mutate(score_std = scale(score))
+
+df %>%
+  ggplot() +
+  geom_point(mapping=aes(x=judge, y=score_std)) +
+  labs(title="Score vs Judge") +
+  theme(axis.text.x = element_text(angle = 45))
+
+df %>%
+  ggplot() +
+  geom_point(mapping=aes(x=wine, y=score_std, 
+                         color=wine),
+             show.legend = FALSE) +
+  labs(title="Score vs Wine") +
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+
+```{r}
+m1 <- ulam(
+  alist(
+    score_std ~ dnorm(mu, sigma),
+    mu <- a[judge] + b[wine],
+    a[judge] ~ dnorm(0, 0.5),
+    b[wine] ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  chains=4, cores=4
+)
+
+#traceplot(m1)
+trankplot(m1)
+
+precis(m1, depth=2)
+#plot(m1, depth=2)
+```
+| Category | Lowest | Highest |
+| --- | --- | --- |
+| Judge | `r levels(df$judge)[8]` | `r levels(df$judge)[5]` |
+| Wine | `r levels(df$wine)[18]` | `r levels(df$wine)[4]` |
+
+
+# Problem 2
+
+# Problem 3
+
+
