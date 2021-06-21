@@ -3,9 +3,9 @@ title: Assignment 5
 author: "Melissa Wong"
 date: \today
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
@@ -13,6 +13,7 @@ output:
 library(tidyverse)
 library(RColorBrewer)
 library(rethinking)
+library(gridExtra)
 ```
 
 ```{r options}
@@ -35,8 +36,9 @@ options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
 data(Wines2012)
 
 df <- Wines2012 %>%
-  select(score, judge, wine) %>%
-  mutate(score_std = scale(score))
+  mutate(score_std = scale(score)) %>%
+  select(score_std, judge, wine)
+
 
 df %>%
   ggplot() +
@@ -73,13 +75,67 @@ trankplot(m1)
 precis(m1, depth=2)
 #plot(m1, depth=2)
 ```
+
+```{r out.width="100%"}
+plot(m1, depth=2)
+```
+
 | Category | Lowest | Highest |
 | --- | --- | --- |
 | Judge | `r levels(df$judge)[8]` | `r levels(df$judge)[5]` |
 | Wine | `r levels(df$wine)[18]` | `r levels(df$wine)[4]` |
 
-
 # Problem 2
+
+```{r}
+
+df <- Wines2012 %>%
+  mutate(score_std = scale(score),
+         flight = as.numeric(flight)-1,
+         w = wine.amer,
+         j = judge.amer) %>%
+  select(score_std, flight, w, j)
+
+p1 <- df %>%
+  ggplot() +
+  geom_point(mapping=aes(x=flight, y=score_std))
+
+p2 <- df %>%
+  ggplot() +
+  geom_point(mapping=aes(x=w, y=score_std))
+
+p3 <- df %>%
+  ggplot() +
+  geom_point(mapping=aes(x=j, y=score_std))
+
+grid.arrange(p1, p2, p3, nrow=1, ncol=3)
+```
+
+
+```{r}
+m2 <- ulam(
+  alist(
+    score_std ~ dnorm(mu, sigma),
+    mu <- a * flight + b * w + c * j,
+    # a ~ dnorm(0, 0.5),
+    # b ~ dnorm(0, 0.5),
+    # c ~ dnorm(0, 0.5),
+    # Normal priors did not yield good estimates in
+    # tails of distribution, so try t-distribution instead
+    a ~ dstudent(3, 0, 0.5),
+    b ~ dstudent(3, 0, 0.5),
+    c ~ dstudent(3, 0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  chains=4, cores=4
+)
+
+#traceplot(m2)
+trankplot(m2)
+
+precis(m2, depth=2)
+```
 
 # Problem 3
 
