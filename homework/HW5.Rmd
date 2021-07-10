@@ -91,22 +91,22 @@ plot(m1, depth=2)
 
 df <- Wines2012 %>%
   mutate(score_std = scale(score),
-         flight = as.numeric(flight)-1,
-         w = wine.amer,
-         j = judge.amer) %>%
-  select(score_std, flight, w, j)
+         red = ifelse(flight=="red", 1, 0),
+         wine_amer = wine.amer,
+         judge_amer = judge.amer) %>%
+  select(score_std, red, wine_amer, judge_amer)
 
 p1 <- df %>%
   ggplot() +
-  geom_point(mapping=aes(x=flight, y=score_std))
+  geom_point(mapping=aes(x=red, y=score_std))
 
 p2 <- df %>%
   ggplot() +
-  geom_point(mapping=aes(x=w, y=score_std))
+  geom_point(mapping=aes(x=wine_amer, y=score_std))
 
 p3 <- df %>%
   ggplot() +
-  geom_point(mapping=aes(x=j, y=score_std))
+  geom_point(mapping=aes(x=judge_amer, y=score_std))
 
 grid.arrange(p1, p2, p3, nrow=1, ncol=3)
 ```
@@ -116,15 +116,11 @@ grid.arrange(p1, p2, p3, nrow=1, ncol=3)
 m2 <- ulam(
   alist(
     score_std ~ dnorm(mu, sigma),
-    mu <- a * flight + b * w + c * j,
-    # a ~ dnorm(0, 0.5),
-    # b ~ dnorm(0, 0.5),
-    # c ~ dnorm(0, 0.5),
-    # Normal priors did not yield good estimates in
-    # tails of distribution, so try t-distribution instead
-    a ~ dstudent(3, 0, 0.5),
-    b ~ dstudent(3, 0, 0.5),
-    c ~ dstudent(3, 0, 0.5),
+    mu <- a + br * red + bw * wine_amer + bj * judge_amer,
+    a ~ dnorm(0, 0.5),
+    br ~ dnorm(0, 0.5),
+    bw ~ dnorm(0, 0.5),
+    bj ~ dnorm(0, 0.5),
     sigma ~ dexp(1)
   ),
   data=df,
@@ -137,6 +133,80 @@ trankplot(m2)
 precis(m2, depth=2)
 ```
 
+The 89% credible interval estimates for all three variables include zero, but only _br_ is clearly centered at zero. The probability mass for _bw_ is mostly negative versus _bj_'s probability mass is mostly positive.  In other words, American wines have slightly lower average scores, and American judges give slightly higher average scores. This is consistent with the estimates from Part 1 (see plots below).  
+
+```{r echo=FALSE}
+res <- precis(m1, depth=2)
+
+cbind(Wines2012 %>%
+  group_by(wine) %>%
+  summarize(american = ifelse(mean(wine.amer),
+                              "Yes", "No")),
+  mu = res$mean[10:29],
+  lwr = res$`5.5%`[10:29],
+  upr = res$`94.5%`[10:29]) %>%
+  ggplot() +
+  geom_pointrange(aes(x=wine, 
+                      y=mu, ymin=lwr, ymax=upr,
+                      color=american)) +
+  theme(axis.text.x = element_text(angle = 45))
+
+```
+
+```{r echo=FALSE}
+res <- precis(m1, depth=2)
+
+cbind(Wines2012 %>%
+  group_by(judge) %>%
+  summarize(american = ifelse(mean(judge.amer),
+                              "Yes", "No")),
+  mu = res$mean[1:9],
+  lwr = res$`5.5%`[1:9],
+  upr = res$`94.5%`[1:9]) %>%
+  ggplot() +
+  geom_pointrange(aes(x=judge, 
+                      y=mu, ymin=lwr, ymax=upr,
+                      color=american)) +
+  theme(axis.text.x = element_text(angle = 45))
+
+```
+ 
 # Problem 3
 
+```{r}
 
+df <- Wines2012 %>%
+  mutate(score_std = scale(score),
+         red = ifelse(flight=="red", 1, 0),
+         wine_amer = wine.amer,
+         judge_amer = judge.amer)%>%
+  select(score_std, red, wine_amer, judge_amer)
+
+m3 <- ulam(
+  alist(
+    score_std ~ dnorm(mu, sigma),
+    mu <- a + br * red + bw * wine_amer + bj * judge_amer + brw * red * wine_amer + brj * red * judge_amer + bwj * wine_amer * judge_amer,
+    a ~ dnorm(0, 0.5),
+    br ~ dnorm(0, 0.5),
+    bw ~ dnorm(0, 0.5),
+    bj ~ dnorm(0, 0.5),
+    brj ~ dnorm(0, 0.5),
+    brw ~ dnorm(0, 0.5),
+    bwj ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ),
+  data=df,
+  chains=4, cores=4
+)
+
+trankplot(m3)
+
+precis(m3)
+```
+_brj_ is the change in average score when an American judge scores a white wine.
+
+_brw_ is the change in average score when the wine is white and American.
+
+_bwj_ is the change in average score when an American judge scores an American wine.
+
+The _brw_ interaction is the only one of the three that isn't clearly centered around zero, but instead is mostly positive. Including the interactions also affected the posterior estimate of _bw_ as now it's clearly centered around zero.   
