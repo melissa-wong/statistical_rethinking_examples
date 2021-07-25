@@ -1,0 +1,178 @@
+---
+title: Rounding & Truncating
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+library(rstan)
+library(here)
+library(bayesplot)
+library(tidybayes)
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+#knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+```
+
+# Simulate Data
+
+```{r message=FALSE}
+N <- 1000
+alpha_true = -1
+beta_true = 2
+sigma_true = 4
+
+df <- data.frame(x = rnorm(N, 0, 10)) %>%
+  mutate(y_true = alpha_true + beta_true*x + rnorm(N, 0, sigma_true),
+    y_round = round(y_true),
+    y_trunc = trunc(y_true)
+  )
+
+ggplot(df) +
+  geom_point(aes(x=x, y=y_true))
+
+df %>%
+  pivot_longer(-x, names_to="data") %>%
+ggplot() +
+  geom_histogram(aes(x=value, fill=data), alpha=0.5) +
+  facet_wrap(~data)
+```
+
+# Reference Model
+
+Fit `y_true` linear model as reference.
+
+```{r results="hide"}
+mdl_data <- list(N = N,
+                 K = 1,
+                 y = df$y_true,
+                 x = matrix(df$x, nrow=N, ncol=1))
+
+# Fit model
+mdl1 <- stan(file=here("rounding_example/y_true.stan"), 
+             data=mdl_data, 
+             model_name="mdl1",
+             chains=1)
+```
+
+```{r}
+print(mdl1)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl1_draws <- mdl1 %>% 
+  gather_draws(alpha, beta[i], sigma) %>%
+  mutate(model_id = "true")
+```
+
+
+# Rounded Data
+
+## Incorrect Model
+
+First, fit `y_round` data to the reference model to see effect of _not_ accounting for the rounding.
+
+```{r results="hide"}
+mdl_data <- list(N = N,
+                 K = 1,
+                 y = df$y_round,
+                 x = matrix(df$x, nrow=N, ncol=1))
+
+# Fit model
+mdl2 <- stan(file=here("rounding_example/y_true.stan"), 
+             data=mdl_data, 
+             model_name="mdl2",
+             chains=1)
+```
+```{r}
+print(mdl2)
+```
+```{r}
+# Save posterior draws for comparison later
+mdl2_draws <- mdl2 %>% 
+  gather_draws(alpha, beta[i], sigma) %>%
+  mutate(model_id = "round_wrong")
+```
+ 
+## Correct Model
+
+TBD
+
+# Truncated Data
+
+## Incorrect Model
+
+Fit `y_trunc` data to the reference model to see effect of _not_ accounting for the truncating.
+
+```{r results="hide"}
+mdl_data <- list(N = N,
+                 K = 1,
+                 y = df$y_trunc,
+                 x = matrix(df$x, nrow=N, ncol=1))
+
+# Fit model
+mdl5 <- stan(file=here("rounding_example/y_true.stan"), 
+             data=mdl_data, 
+             model_name="mdl5",
+             chains=1)
+```
+
+```{r}
+print(mdl5)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl5_draws <- mdl5 %>% 
+  gather_draws(alpha, beta[i], sigma) %>%
+  mutate(model_id = "trunc_wrong")
+```
+
+## Correct Model
+
+TBD
+
+# Compare Models
+
+```{r}
+# Compare model fits
+rbind(mdl1_draws, mdl2_draws, mdl5_draws) %>%
+  group_by(.variable, model_id) %>%
+  summarize(mean = mean(.value),
+            lower = quantile(.value, probs=0.025),
+            upper = quantile(.value, probs = 0.975),
+            .groups="drop") %>%
+  mutate(model_id = fct_relevel(model_id, "true")) %>%
+  # arrange(.variable, model_id) %>%
+  # knitr::kable()
+  ggplot(aes(x=mean, xmin=lower, xmax=upper,
+             y=model_id, color=model_id)) +
+  geom_errorbarh(aes(height=0.1)) +
+  geom_point() +
+  facet_wrap(~.variable, scales="free_x") +
+  labs(x="Posterior 95% Interval") +
+  geom_vline(data = data.frame(xint=c(alpha_true, beta_true, sigma_true), 
+                               .variable=c("alpha", "beta", "sigma")),
+             aes(xintercept = xint), color="red",
+             linetype="dashed") +
+  theme(axis.text.x = element_text(angle = 45))
+```
