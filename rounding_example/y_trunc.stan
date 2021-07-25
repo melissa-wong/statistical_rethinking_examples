@@ -9,10 +9,16 @@ parameters {
   real<lower=0> sigma;  // error scale
 }
 model {
+  vector[N] mu;
+  mu = x * beta + alpha;
   // Likelihood
-  y ~ normal(x * beta + alpha, sigma);
+  target += log(Phi((y + 1.0 - mu) / sigma) 
+    - Phi((y - mu) / sigma));
   // Priors
-  alpha ~ normal(0, 1);
-  beta ~ normal(0, 1);
-  sigma ~ exponential(1);
+  //alpha ~ normal(0, 1);
+  target += normal_lpdf(alpha | 0, 1);
+  //beta ~ normal(0, 1);
+  target += normal_lpdf(beta | 0, 1);
+  //sigma ~ exponential(1);
+  target += exponential_lpdf(sigma | 1);
 }
