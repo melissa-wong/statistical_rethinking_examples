@@ -10,7 +10,9 @@ parameters {
 }
 model {
   // Likelihood
+  //print("log density before =", target());
   y ~ normal(x * beta + alpha, sigma);
+  //print("log density after =", target());
   // Priors
   alpha ~ normal(0, 1);
   beta ~ normal(0, 1);

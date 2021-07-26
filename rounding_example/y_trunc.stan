@@ -12,8 +12,17 @@ model {
   vector[N] mu;
   mu = x * beta + alpha;
   // Likelihood
-  target += log(Phi((y + 1.0 - mu) / sigma) 
-    - Phi((y - mu) / sigma));
+  //print("log density before =", target());
+  for(n in 1:N) {
+    if(y[n] < 0.0) {
+      target += log(Phi((y[n] - mu[n]) / sigma) 
+          - Phi((y[n] - 1.0 - mu[n]) / sigma));     }
+    else {
+      target += log(Phi((y[n] + 1.0 - mu[n]) / sigma) 
+          - Phi((y[n] - mu[n]) / sigma));    
+    }
+  }
+  //print("log density after =", target());
   // Priors
   //alpha ~ normal(0, 1);
   target += normal_lpdf(alpha | 0, 1);

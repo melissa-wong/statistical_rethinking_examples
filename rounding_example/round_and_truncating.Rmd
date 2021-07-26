@@ -35,7 +35,7 @@ options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
 
 ```{r message=FALSE}
 N <- 1000
-alpha_true = -2
+alpha_true = -1
 beta_true = 1
 sigma_true = 1
 
@@ -75,7 +75,7 @@ mdl1 <- stan(file=here("rounding_example/y_true.stan"),
                  y = df$y_true,
                  x = df$x), 
              model_name="mdl1",
-             chains=1)
+             chains=4)
 ```
 
 ```{r}
@@ -108,7 +108,7 @@ mdl2 <- stan(file=here("rounding_example/y_true.stan"),
                  y = df$y_round,
                  x = df$x), 
              model_name="mdl2",
-             chains=1)
+             chains=4)
 ```
 ```{r}
 print(mdl2)
@@ -136,7 +136,7 @@ mdl3 <- stan(file=here("rounding_example/y_round.stan"),
                  y = df$y_round,
                  x = df$x), 
              model_name="mdl3",
-             chains=1)
+             chains=4)
 ```
 
 ```{r}
@@ -167,7 +167,7 @@ mdl4 <- stan(file=here("rounding_example/y_true.stan"),
                  y = df$y_trunc,
                  x = df$x), 
              model_name="mdl4",
-             chains=1)
+             chains=4)
 ```
 
 ```{r}
@@ -197,7 +197,7 @@ mdl5 <- stan(file=here("rounding_example/y_trunc.stan"),
                  y = df$y_trunc,
                  x = df$x), 
              model_name="mdl5",
-             chains=1)
+             chains=4)
 ```
 
 ```{r}
