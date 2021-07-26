@@ -91,7 +91,7 @@ mcmc_rank_overlay(mdl1)
 mdl1_draws <- mdl1 %>% 
   #gather_draws(alpha, beta[i], sigma) %>%
   gather_draws(alpha, beta, sigma) %>%
-  mutate(model_id = "true")
+  mutate(model_id = "reference")
 ```
 
 
@@ -122,7 +122,7 @@ mcmc_rank_overlay(mdl2)
 # Save posterior draws for comparison later
 mdl2_draws <- mdl2 %>% 
   gather_draws(alpha, beta, sigma) %>%
-  mutate(model_id = "round_wrong")
+  mutate(model_id = "round_reference")
 ```
  
 ## Correct Model
@@ -151,12 +151,12 @@ mcmc_rank_overlay(mdl3)
 # Save posterior draws for comparison later
 mdl3_draws <- mdl3 %>% 
   gather_draws(alpha, beta, sigma) %>%
-  mutate(model_id = "round_correct")
+  mutate(model_id = "round_round")
 ```
 
 # Truncated Data
 
-## Incorrect Model
+## Incorrect Model (Reference)
 
 Fit `y_trunc` data to the reference model to see effect of _not_ accounting for the truncating.
 
@@ -183,7 +183,7 @@ mcmc_rank_overlay(mdl4)
 # Save posterior draws for comparison later
 mdl4_draws <- mdl4 %>% 
   gather_draws(alpha, beta, sigma) %>%
-  mutate(model_id = "trunc_wrong")
+  mutate(model_id = "trunc_reference")
 ```
 
 ## Correct Model
@@ -213,7 +213,37 @@ mcmc_rank_overlay(mdl5)
 # Save posterior draws for comparison later
 mdl5_draws <- mdl5 %>% 
   gather_draws(alpha, beta, sigma) %>%
-  mutate(model_id = "trunc_correct")
+  mutate(model_id = "trunc_trunc")
+```
+
+## Incorrect Model (Rounding)
+
+Next, fit `y_trunc` data to the model which assumes rounding.
+
+```{r results="hide"}
+# Fit model
+mdl6 <- stan(file=here("rounding_example/y_round.stan"), 
+             data=list(N = N,
+                 y = df$y_trunc,
+                 x = df$x), 
+             model_name="mdl6",
+             chains=4)
+```
+
+```{r}
+print(mdl6)
+```
+
+```{r}
+mcmc_rank_overlay(mdl6)
+```
+
+
+```{r}
+# Save posterior draws for comparison later
+mdl6_draws <- mdl6 %>% 
+  gather_draws(alpha, beta, sigma) %>%
+  mutate(model_id = "trunc_round")
 ```
 
 
@@ -223,7 +253,7 @@ mdl5_draws <- mdl5 %>%
 # Compare model fits
 rbind(mdl1_draws, mdl2_draws,
       mdl3_draws, mdl4_draws,
-      mdl5_draws) %>%
+      mdl5_draws, mdl6_draws) %>%
   group_by(.variable, model_id) %>%
   summarize(mean = mean(.value),
             lower = quantile(.value, probs=0.025),
