@@ -1,0 +1,146 @@
+---
+title: Assignment 6
+author: "Melissa Wong"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+library(rethinking)
+library(gridExtra)
+library(tidybayes)
+library(bayesplot)
+library(rstan)
+library(dagitty)
+library(here)
+library(brms)
+
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+```
+
+# Problem 1
+ 
+```{r}
+data("NWOGrants")
+
+G <- dagitty("dag{ 
+             awards <- gender -> discipline;
+             discipline -> awards;
+             }")
+
+plot(graphLayout(G))
+```
+$$ y_i \sim Binom(N, p_i)$$
+$$logit(p_i) = \alpha_{gender[i]}$$
+
+$$\alpha_{gender[i]} \sim N(0,1)$$
+```{r results='hide'}
+mdl1 <- brm(awards | trials(applications) ~ gender,
+           data=NWOGrants,
+           family=binomial(link="logit"),
+           chains=4,
+           file_refit = "on_change",
+           file = here("homework/mdl6-1a.rds"))
+
+#stancode(mdl)
+```
+
+
+```{r}
+mcmc_rank_overlay(mdl1)
+
+summary(mdl1)
+
+#get_variables(mdl1)
+
+#mdl1_draws <- mdl1 %>%
+#  gather_draws(b_Intercept, b_genderm)
+
+```
+
+```{r results='hide'}
+mdl2 <- brm(awards | trials(applications) ~ gender + discipline,
+           data=NWOGrants,
+           family=binomial(link="logit"),
+           chains=4,
+           file_refit = "on_change",
+           file = here("homework/mdl6-1b.rds"))
+
+#stancode(mdl2)
+```
+
+```{r}
+mcmc_rank_overlay(mdl2)
+
+summary(mdl2)
+```
+
+The total causal effect of _gender_ on receiving an award is that the odds are ~1.2 times ([1.01, 1.5] 95% credible interval) higher for males vs females.
+
+The 95% credible interval for the _direct_ causal effect of _gender_ on receiving an award is [0.9324, 1.42] which includes 1, so in fact gender does not directly affect the odds of receiving an award. However, some departments are much more likely than others to receive awards.  If we wanted to increase the number of awards to females, the we would want to recruit more more females into the Chemical Sciences, Physics, Physical Sciences and Earth & Life Sciences departments.
+
+
+```{r include=FALSE, eval=FALSE}
+# rstan equivalent to above
+
+# Total causal effect of gender
+mdl1 <- stan(file=here("homework/m6-1.stan"), 
+             data=list(N = nrow(NWOGrants),
+                 applications = NWOGrants$applications,
+                 awards = NWOGrants$awards,
+                 gender = as.numeric(NWOGrants$gender),
+                 Ngender = length(unique(NWOGrants$gender))),
+             chains=4)
+
+# Example of how to do predictions without refitting stan model
+# Too much work--either use brms or do predictions in R 
+# using stanfit posteriors
+params <- extract(mdl1, pars="alpha")
+md1_pred <- stan(file=here("homework/m6-1_pred.stan"), 
+             data=list(N = nrow(NWOGrants),
+                 applications = NWOGrants$applications,
+                 gender = as.numeric(NWOGrants$gender),
+                 Ngender = length(unique(NWOGrants$gender)),
+                 Nsamples = nrow(params$alpha),
+                 alpha = params$alpha),
+             algorithm = "Fixed_param",
+             chains=1)
+
+print(mdl1)
+
+mcmc_rank_overlay(mdl1)
+
+mdl1_draws <- mdl1 %>%
+  gather_draws(alpha[i]) %>%
+  mutate(gender = ifelse(i==1, "male", "female")) %>%
+  ungroup() %>%
+  select(-i)
+
+contrast <- mdl1_draws %>%
+  pivot_wider(names_from=gender, values_from=.value) %>%
+  mutate(delta = male - female)
+
+contrast %>%
+  ggplot() +
+  geom_density(aes(x=delta))
+```
+
