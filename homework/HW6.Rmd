@@ -48,6 +48,9 @@ G <- dagitty("dag{
              }")
 
 plot(graphLayout(G))
+
+# adjustmentSets(G, outcome="awards", exposure="gender",
+#                effect="direct")
 ```
 $$ y_i \sim Binom(N, p_i)$$
 $$logit(p_i) = \alpha_{gender[i]}$$
@@ -143,4 +146,119 @@ contrast %>%
   ggplot() +
   geom_density(aes(x=delta))
 ```
+
+# Problem 2
+
+```{r}
+G2 <- dagitty("dag{ 
+             awards <- gender -> discipline;
+             discipline -> awards;
+             discipline <- U -> awards;
+             U [unobserved];
+             }")
+
+plot(graphLayout(G2))
+
+impliedConditionalIndependencies(G2)
+
+adjustmentSets(G2, outcome="awards", exposure="gender",
+               effect="total")
+```
+
+Conditioning on discipline "opens" the backdoor path through the unobserved variable, so it no longer provides an un-confounded estimate of the direct effect of gender.
+
+# Problem 3
+
+```{r}
+library(MASS)
+data(eagles)
+
+E <- dagitty("dag{ 
+             Success <- PirateAge -> PirateSize;
+             PirateSize -> Success;
+             VictimSize -> Success;
+             }")
+
+plot(graphLayout(E))
+```
+
+Fit three models:
+
+1. Total causal effect of pirate age
+
+2. Assume no interaction between pirate and victim size
+
+3. Allow for interaction between pirate and victim size
+
+Note: `mdl3b` and `mdl3c` are sensitive to the choice of prior, most likely due to the small amount of data. In fact `mdl3c` has poor sample size in the tails when using a flat prior--a weakly informative prior dramatically improves sampling in the tails. 
+
+## Pirate Age, Victim Size only model
+
+```{r results="hide"}
+mdl3a <- brm(y | trials(n) ~ A + V,
+              data=eagles,
+              family=binomial(link="logit"),
+             prior=set_prior(
+               "normal(0,2)",
+               class="b"
+             ),
+              chains=4,
+              file_refit = "on_change",
+            file = here("homework/mdl3a.rds"))
+```
+
+
+```{r}
+mcmc_rank_overlay(mdl3a)
+
+summary(mdl3a)
+```
+
+## All features, no interaction Model
+
+```{r results="hide"}
+mdl3b <- brm(y | trials(n) ~ A + V + P,
+              data=eagles,
+              family=binomial(link="logit"),
+             prior=set_prior(
+               "normal(0,2)",
+               class="b"
+             ),
+              chains=4,
+              file_refit = "on_change",
+            file = here("homework/mdl3b.rds"))
+```
+
+
+```{r}
+mcmc_rank_overlay(mdl3b)
+
+summary(mdl3b)
+```
+
+## All features, size interaction Model
+
+```{r results="hide"}
+mdl3c <- brm(y | trials(n) ~ A + V * P,
+             data=eagles,
+             family=binomial(link="logit"),
+             prior=set_prior(
+               "normal(0,2)",
+               class="b"
+             ),
+             chains=4,
+             file_refit = "on_change",
+             file = here("homework/mdl3c.rds"))
+```
+
+
+```{r}
+mcmc_rank_overlay(mdl3c)
+
+summary(mdl3c)
+```
+
+## Summary
+
+
 
