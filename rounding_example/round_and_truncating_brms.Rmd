@@ -37,7 +37,7 @@ A total of seven fits are performed:
 
 library(tidyverse)
 library(RColorBrewer)
-library(rstan)
+library(brms)
 library(here)
 library(bayesplot)
 library(tidybayes)
@@ -55,6 +55,10 @@ options("scipen" = 1, "digits" = 4)
 # Set Default ggplot palette
 options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
 options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+
+ncores <- min(4, parallel::detectCores()-1)
+
+set.seed(1234)
 ```
 
 # Simulate Data
@@ -89,23 +93,21 @@ ggplot() +
 Fit `y_true` linear model as reference.
 
 ```{r results="hide"}
-# mdl_data <- list(N = N,
-#                  K = 2,
-#                  y = df$y_true,
-#                  x = matrix(c(df$x, df$x2), 
-#                             nrow=N))
 
 # Fit model
-mdl1 <- stan(file=here("rounding_example/y_true.stan"), 
-             data=list(N = N,
-                 y = df$y_true,
-                 x = df$x), 
-             model_name="mdl1",
-             chains=4)
+mdl1 <- brm(y_true ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl1.rds"))
 ```
 
 ```{r}
-print(mdl1)
+summary(mdl1)
 ```
 
 ```{r}
@@ -113,13 +115,61 @@ mcmc_rank_overlay(mdl1)
 ```
 
 ```{r}
+
 # Save posterior draws for comparison later
-mdl1_draws <- mdl1 %>% 
+mdl1_draws <- mdl1 %>%
   #gather_draws(alpha, beta[i], sigma) %>%
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "reference")
 ```
 
+
+# Define custom brms functions
+
+## Define Rounded Likelihood
+
+```{r}
+rounded_normal <- custom_family(
+  "rounded_normal", 
+  dpars = c("mu", "sigma"),
+  lb = c(NA, 0),
+  links = c("identity"), 
+  type = "real"
+)
+
+stan_funs_rounded_normal <- "
+  real rounded_normal_lpdf(real y, real mu, real sigma) {
+    // Likelihood
+    return log(Phi((y + 0.5 - mu)/sigma) - Phi((y - 0.5 - mu)/sigma));
+  }
+"
+```
+
+## Define Truncated Likelihood
+
+```{r}
+truncated_normal <- custom_family(
+  "truncated_normal", 
+  dpars = c("mu", "sigma"),
+  lb = c(NA, 0),
+  links = c("identity"), 
+  type = "real",
+)
+
+stan_funs_truncated_normal <- "
+  real truncated_normal_lpdf(real y, real mu, real sigma) {
+    // Likelihood
+    if(y < 0.0) {
+       return log(Phi((y - mu) / sigma)
+          - Phi((y - 1.0 - mu) / sigma));     
+    }
+    else {
+      return log(Phi((y + 1.0 - mu) / sigma)
+            - Phi((y - mu) / sigma));
+    }
+  }
+"
+```
 # Rounded Data
 
 ## Incorrect Model (Reference)
@@ -128,12 +178,15 @@ First, fit `y_round` data to the reference model to see effect of *not* accounti
 
 ```{r results="hide"}
 # Fit model
-mdl2 <- stan(file=here("rounding_example/y_true.stan"), 
-             data=list(N = N,
-                 y = df$y_round,
-                 x = df$x), 
-             model_name="mdl2",
-             chains=4)
+mdl2 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl2.rds"))
 ```
 
 ```{r}
@@ -147,22 +200,30 @@ mcmc_rank_overlay(mdl2)
 ```{r}
 # Save posterior draws for comparison later
 mdl2_draws <- mdl2 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "round_reference")
 ```
 
 ## Correct Model
 
-Next, fit `y_round` data to the correct model twhich accounts for rounding.
+
+
+Next, fit `y_round` data to the correct model which accounts for rounding.
 
 ```{r results="hide"}
 # Fit model
-mdl3 <- stan(file=here("rounding_example/y_round.stan"), 
-             data=list(N = N,
-                 y = df$y_round,
-                 x = df$x), 
-             model_name="mdl3",
-             chains=4)
+mdl3 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=rounded_normal,
+            stanvars = stanvar(scode=stan_funs_rounded_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl3.rds"))
 ```
 
 ```{r}
@@ -176,7 +237,7 @@ mcmc_rank_overlay(mdl3)
 ```{r}
 # Save posterior draws for comparison later
 mdl3_draws <- mdl3 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "round_round")
 ```
 
@@ -186,12 +247,18 @@ First, fit `y_round` data to the truncated model to see effect of incorrect mode
 
 ```{r results="hide"}
 # Fit model
-mdl7 <- stan(file=here("rounding_example/y_trunc.stan"), 
-             data=list(N = N,
-                 y = df$y_round,
-                 x = df$x), 
-             model_name="mdl7",
-             chains=4)
+mdl7 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=truncated_normal,
+            stanvars = stanvar(scode=stan_funs_truncated_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl7.rds"))
 ```
 
 ```{r}
@@ -205,7 +272,7 @@ mcmc_rank_overlay(mdl7)
 ```{r}
 # Save posterior draws for comparison later
 mdl7_draws <- mdl7 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "round_trunc")
 ```
 
@@ -217,12 +284,15 @@ Fit `y_trunc` data to the reference model to see effect of *not* accounting for 
 
 ```{r results="hide"}
 # Fit model
-mdl4 <- stan(file=here("rounding_example/y_true.stan"), 
-             data=list(N = N,
-                 y = df$y_trunc,
-                 x = df$x), 
-             model_name="mdl4",
-             chains=4)
+mdl4 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl4.rds"))
 ```
 
 ```{r}
@@ -236,22 +306,30 @@ mcmc_rank_overlay(mdl4)
 ```{r}
 # Save posterior draws for comparison later
 mdl4_draws <- mdl4 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "trunc_reference")
 ```
 
 ## Correct Model
 
+
+
 Next, fit `y_trunc` data to the correct model which accounts for truncation.
 
 ```{r results="hide"}
 # Fit model
-mdl5 <- stan(file=here("rounding_example/y_trunc.stan"), 
-             data=list(N = N,
-                 y = df$y_trunc,
-                 x = df$x), 
-             model_name="mdl5",
-             chains=4)
+mdl5 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=truncated_normal,
+            stanvars = stanvar(scode=stan_funs_truncated_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl5.rds"))
 ```
 
 ```{r}
@@ -265,7 +343,7 @@ mcmc_rank_overlay(mdl5)
 ```{r}
 # Save posterior draws for comparison later
 mdl5_draws <- mdl5 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "trunc_trunc")
 ```
 
@@ -275,12 +353,18 @@ Next, fit `y_trunc` data to the model which assumes rounding.
 
 ```{r results="hide"}
 # Fit model
-mdl6 <- stan(file=here("rounding_example/y_round.stan"), 
-             data=list(N = N,
-                 y = df$y_trunc,
-                 x = df$x), 
-             model_name="mdl6",
-             chains=4)
+mdl6 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=rounded_normal,
+            stanvars = stanvar(scode=stan_funs_rounded_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl6.rds"))
 ```
 
 ```{r}
@@ -294,7 +378,7 @@ mcmc_rank_overlay(mdl6)
 ```{r}
 # Save posterior draws for comparison later
 mdl6_draws <- mdl6 %>% 
-  gather_draws(alpha, beta, sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
   mutate(model_id = "trunc_round")
 ```
 
@@ -321,7 +405,7 @@ rbind(mdl1_draws, mdl2_draws,
   facet_wrap(~.variable, scales="free_x") +
   labs(x="Posterior 95% Interval") +
   geom_vline(data = data.frame(xint=c(alpha_true, beta_true, sigma_true), 
-                               .variable=c("alpha", "beta", "sigma")),
+                               .variable=c("b_Intercept", "b_x", "sigma")),
              aes(xintercept = xint), color="red",
              linetype="dashed") +
   theme(axis.text.x = element_text(angle = 45)) +

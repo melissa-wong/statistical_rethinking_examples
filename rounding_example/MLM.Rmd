@@ -1,0 +1,18 @@
+---
+title: "MLM"
+author: "Melissa"
+date: "8/11/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(brms)
+```
+
+Explanation for how to simulate random effects:  https://stats.stackexchange.com/questions/488188/what-are-the-steps-to-simulate-data-for-a-linear-model-with-random-slopes-and-ra
+
+
+# Simulate Data
+
+
