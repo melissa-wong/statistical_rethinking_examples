@@ -46,7 +46,7 @@ options(brms.backend="cmdstanr")
 # Problem 1
  
 ```{r}
-data("Trolley")
+data("Trolley", package="rethinking")
 
 df <- Trolley %>%
   select(response, action, intention, contact, edu, age) %>% 
@@ -59,12 +59,14 @@ df <- Trolley %>%
                            "Master's Degree",
                            "Graduate Degree"))
 
-df$edu <- factor(df$edu, ordered = TRUE)
+df$edu_ordered <- factor(df$edu, ordered = TRUE)
 ```
 
 
 
 ```{r include=FALSE, eval=FALSE}
+
+# Intercept-only models comparing logit and probit link functions
 
 # logit link
 mdl_logit <- brm(response ~  1,
@@ -116,12 +118,14 @@ plot(graphLayout(G))
  adjustmentSets(G, outcome="response", exposure="edu",
                 effect="direct")
 ```
+
 Need to condition on _age_ to determine what, if any, direct causal effect _edu_ has on _response_.
 
 ## logit link
 
 ```{r results='hide'}
 
+# Model edu as unordered factor
 mdl1 <- brm(response ~  age + edu + intention + action + contact + action:intention + contact:intention,
            data=df,
            family=cumulative(link="logit"),
@@ -131,9 +135,10 @@ mdl1 <- brm(response ~  age + edu + intention + action + contact + action:intent
            file = here("homework/mdl7-1.rds")
            )
 
-# Treat edu as monotonic ordered factor
+# Model edu as monotonic ordered factor
+# This is equivalent to the model in Statistical Rethinking
 # See https://cran.r-project.org/web/packages/brms/vignettes/brms_monotonic.html
-mdl2 <- brm(response ~  age + mo(edu) + intention + action + contact + action:intention + contact:intention,
+mdl2 <- brm(response ~  age + mo(edu_ordered) + intention + action + contact + action:intention + contact:intention,
            data=df,
            family=cumulative(link="logit"),
            chains=4,
@@ -141,10 +146,28 @@ mdl2 <- brm(response ~  age + mo(edu) + intention + action + contact + action:in
            file_refit = "on_change",
            file = here("homework/mdl7-2.rds")
            )
-#stancode(mdl)
+
+# Model edu as ordered factor
+# See https://stats.idre.ucla.edu/r/library/r-library-contrast-coding-systems-for-categorical-variables/
+# for more info on ordered factors & polynomial contrasts
+mdl3 <- brm(response ~  age + edu_ordered + intention + action + contact + action:intention + contact:intention,
+           data=df,
+           family=cumulative(link="logit"),
+           chains=4,
+           cores=ncores,
+           file_refit = "on_change",
+           file = here("homework/mdl7-3.rds")
+           )
+
 ```
 
 
+
+```{r}
+loo(mdl1, mdl2, mdl3)
+```
+
+Of the three models, the monotonic ordered predictor is the worst fit.  So, I would choose the unordered categorical predictor model (_mdl1_) since that is easier to interpret than _mdl3_.
 
 ```{r}
 # Note: Intercept terms are when predictors are mean centered
@@ -173,17 +196,18 @@ mcmc_plot(mdl1, type="intervals",
 conditional_effects(mdl1, categorical=TRUE) 
 ```
 
-```{r}
-loo(mdl1, mdl2)
-```
-
 ## probit link
+
+Just for fun, let's compare with a model using a probit link.
 
 ```{r results='hide'}
 
 mdl1b <- brm(response ~  age + edu + intention + action + contact + action:intention + contact:intention,
            data=df,
            family=cumulative(link="probit"),
+           prior = c(set_prior("normal(0,2)", class="b"),
+                     set_prior("normal(0,2)", class="Intercept")),
+           inits="0",
            chains=4,
            cores=ncores,
            file_refit = "on_change",
@@ -200,16 +224,94 @@ mcmc_plot(mdl1b, type="intervals",
           prob=0.5, prob_outer=0.95,
           point_est="median")
 
-plot(conditional_effects(mdl1b, categorical = TRUE)) 
 ```
-```{r include=FALSE, evalu=FALSE}
-# Create conditional effects plot by hand
-add_epred_draws(mdl1b, 
-                newdata=data.frame(age=seq(10, 72),
-                                        edu="Elementary School")) %>%
-  ggplot(aes(x=age, color=.category)) +
-  stat_lineribbon(aes(y = .epred),
-                  .width=0.95) 
-  
+
+Let's compare the cutpoints for _mdl1_ and _mdl1b_.
+
+```{r}
+mdl1_cuts <- fixef(mdl1, pars=c(paste0("Intercept[", 1:6, "]"))) %>% 
+  as.data.frame() %>% 
+  mutate(link = "logit")
+
+mdl1b_cuts <- fixef(mdl1b, pars=c(paste0("Intercept[", 1:6, "]"))) %>% 
+  as.data.frame() %>% 
+  mutate(link = "probit")
+
+rbind(mdl1_cuts, mdl1b_cuts) %>% 
+ggplot() +
+  geom_vline(mapping=aes(xintercept=Estimate, color=link),
+             linetype="dashed") +
+  stat_function(fun=dnorm, mapping=aes(color="probit")) +
+  stat_function(fun=dlogis, mapping=aes(color="logit")) +
+  labs(x="", y="", title="Cutpoints Comparison")
+```
+
+```{r}
+# This is how to create conditional effects plot by hand
+# add_epred_draws(mdl1b, 
+#                 newdata=data.frame(age=seq(10, 72),
+#                                         edu="Elementary School")) %>%
+#   ggplot(aes(x=age, color=.category)) +
+#   stat_lineribbon(aes(y = .epred),
+#                   .width=0.95) 
+
+conditional_effects(mdl1b, categorical = TRUE) 
+
+```
+
+# Problem 2
+
+```{r}
+G2 <- dagitty("dag{ 
+             response <- age -> edu;
+             edu -> response;
+             intention -> response;
+             contact -> response;
+             action -> response;
+             response <- gender -> edu;
+             }")
+
+plot(graphLayout(G2))
+
+ adjustmentSets(G2, outcome="response", exposure="edu",
+                effect="direct")
+```
+Adding _gender_ to the model creates a backdoor path, so if we want to estimate the direct causal effect of _education_ on _response_ then we need to condition on both _age_ and _gender_. 
+
+I'll stick with the logit link and unordered _edu_ model.
+
+```{r results="hide"}
+df <- Trolley %>%
+  select(response, action, intention, contact, edu, age, male) %>% 
+  mutate(edu = fct_relevel(edu, "Elementary School",
+                           "Middle School",
+                           "Some High School",
+                           "High School Graduate",
+                           "Some College",
+                           "Bachelor's Degree",
+                           "Master's Degree",
+                           "Graduate Degree"))
+
+# Model edu as unordered factor
+mdl4 <- brm(response ~  age + edu + male + intention + action + contact + action:intention + contact:intention,
+           data=df,
+           family=cumulative(link="logit"),
+           chains=4,
+           cores=ncores,
+           file_refit = "on_change",
+           file = here("homework/mdl7-4.rds")
+           )
+```
+
+
+```{r}
+summary(mdl4)
+
+mcmc_rank_overlay(mdl4, regex_pars=c("^b_", "sigma"))
+
+mcmc_plot(mdl4, type="intervals",
+          pars=c("^b_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
 ```
 
