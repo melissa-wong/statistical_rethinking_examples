@@ -3,9 +3,9 @@ title: Assignment 7
 author: "Melissa Wong"
 date: \today
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
@@ -314,4 +314,13 @@ mcmc_plot(mdl4, type="intervals",
           prob=0.5, prob_outer=0.95,
           point_est="median")
 ```
+
+```{r}
+conditional_effects(mdl4, categorical=TRUE) 
+```
+
+The effects of _edu_ are generally the same even when including _gender_ in the model. The most obvious difference is that a response of 7 is more likely (posterior mean around 0.27 vs 0.22) for the Elementary School only group. 
+
+The gender effect is interesting as men much more likely to respond with the highest categories (6/7) than are women.  Further the split between the lowest responses (1/2/3) and the moderate to high responses (4/5/6/7) is much larger for men vs women.
+
 
