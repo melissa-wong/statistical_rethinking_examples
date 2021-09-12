@@ -1,0 +1,418 @@
+---
+title: Rounding & Truncating
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Description
+
+This file looks at the effects of rounding and truncation on parameter estimates for a simple linear model
+
+$$y = \alpha + x\beta$$
+
+There are three simulated data sets:
+
+1.  y_true = raw data
+
+2.  y_round = round(y_true)
+
+3.  y_trunc = trunc(y_true)
+
+Similarly there are three different models: *reference*, *rounded*, *truncated*.
+
+A total of seven fits are performed:
+
+1.  y_true with *reference* (This is the "reference" fit against which the others are compared).
+
+2-4. y_round with *reference*, *rounded*, and *truncated*
+
+5-7. y_trunc with *reference*, *rounded*, and *truncated*
+
+# Setup
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+library(brms)
+library(here)
+library(bayesplot)
+library(tidybayes)
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+#knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+
+ncores <- min(4, parallel::detectCores()-1)
+
+set.seed(1234)
+```
+
+# Simulate Data
+
+```{r message=FALSE}
+N <- 1000
+alpha_true = -1
+beta_true = 1
+sigma_true = 1
+
+df <- data.frame(x = rnorm(N, 0, 5)) %>%
+  mutate(y_true = alpha_true + beta_true*x + rnorm(N, 0, sigma_true),
+    y_round = round(y_true),
+    y_trunc = trunc(y_true)
+  )
+
+df %>%
+  pivot_longer(-starts_with("x"), names_to="data") %>%
+  ggplot() +
+  geom_point(aes(x=x, y=value), alpha=0.2) +
+  facet_wrap(~data)
+
+df %>%
+  pivot_longer(-starts_with("x"), names_to="data") %>%
+ggplot() +
+  geom_histogram(aes(x=value, fill=data), alpha=0.8) +
+  facet_wrap(~data)
+```
+
+# Reference Model
+
+Fit `y_true` linear model as reference.
+
+```{r results="hide"}
+
+# Fit model
+mdl1 <- brm(y_true ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl1.rds"))
+```
+
+```{r}
+summary(mdl1)
+```
+
+```{r}
+mcmc_rank_overlay(mdl1)
+```
+
+```{r}
+
+# Save posterior draws for comparison later
+mdl1_draws <- mdl1 %>%
+  #gather_draws(alpha, beta[i], sigma) %>%
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "reference")
+```
+
+
+# Define custom brms functions
+
+## Define Rounded Likelihood
+
+```{r}
+rounded_normal <- custom_family(
+  "rounded_normal", 
+  dpars = c("mu", "sigma"),
+  lb = c(NA, 0),
+  links = c("identity"), 
+  type = "real"
+)
+
+stan_funs_rounded_normal <- "
+  real rounded_normal_lpdf(real y, real mu, real sigma) {
+    // Likelihood
+    return log(Phi((y + 0.5 - mu)/sigma) - Phi((y - 0.5 - mu)/sigma));
+  }
+"
+```
+
+## Define Truncated Likelihood
+
+```{r}
+truncated_normal <- custom_family(
+  "truncated_normal", 
+  dpars = c("mu", "sigma"),
+  lb = c(NA, 0),
+  links = c("identity"), 
+  type = "real",
+)
+
+stan_funs_truncated_normal <- "
+  real truncated_normal_lpdf(real y, real mu, real sigma) {
+    // Likelihood
+    if(y < 0.0) {
+       return log(Phi((y - mu) / sigma)
+          - Phi((y - 1.0 - mu) / sigma));     
+    }
+    else {
+      return log(Phi((y + 1.0 - mu) / sigma)
+            - Phi((y - mu) / sigma));
+    }
+  }
+"
+```
+# Rounded Data
+
+## Incorrect Model (Reference)
+
+First, fit `y_round` data to the reference model to see effect of *not* accounting for the rounding.
+
+```{r results="hide"}
+# Fit model
+mdl2 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl2.rds"))
+```
+
+```{r}
+print(mdl2)
+```
+
+```{r}
+mcmc_rank_overlay(mdl2)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl2_draws <- mdl2 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "round_reference")
+```
+
+## Correct Model
+
+
+
+Next, fit `y_round` data to the correct model which accounts for rounding.
+
+```{r results="hide"}
+# Fit model
+mdl3 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=rounded_normal,
+            stanvars = stanvar(scode=stan_funs_rounded_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl3.rds"))
+```
+
+```{r}
+print(mdl3)
+```
+
+```{r}
+mcmc_rank_overlay(mdl3)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl3_draws <- mdl3 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "round_round")
+```
+
+## Incorrect Model (Truncated)
+
+First, fit `y_round` data to the truncated model to see effect of incorrect model.
+
+```{r results="hide"}
+# Fit model
+mdl7 <- brm(y_round ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=truncated_normal,
+            stanvars = stanvar(scode=stan_funs_truncated_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl7.rds"))
+```
+
+```{r}
+print(mdl7)
+```
+
+```{r}
+mcmc_rank_overlay(mdl7)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl7_draws <- mdl7 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "round_trunc")
+```
+
+# Truncated Data
+
+## Incorrect Model (Reference)
+
+Fit `y_trunc` data to the reference model to see effect of *not* accounting for the truncating.
+
+```{r results="hide"}
+# Fit model
+mdl4 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=gaussian(),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl4.rds"))
+```
+
+```{r}
+print(mdl4)
+```
+
+```{r}
+mcmc_rank_overlay(mdl4)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl4_draws <- mdl4 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "trunc_reference")
+```
+
+## Correct Model
+
+
+
+Next, fit `y_trunc` data to the correct model which accounts for truncation.
+
+```{r results="hide"}
+# Fit model
+mdl5 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=truncated_normal,
+            stanvars = stanvar(scode=stan_funs_truncated_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl5.rds"))
+```
+
+```{r}
+print(mdl5)
+```
+
+```{r}
+mcmc_rank_overlay(mdl5)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl5_draws <- mdl5 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "trunc_trunc")
+```
+
+## Incorrect Model (Rounding)
+
+Next, fit `y_trunc` data to the model which assumes rounding.
+
+```{r results="hide"}
+# Fit model
+mdl6 <- brm(y_trunc ~ 1 + x,
+            prior = c(set_prior("normal(0, 5)", class="Intercept"),
+                      set_prior("exponential(1)", class="sigma")),
+            data=df,
+            family=rounded_normal,
+            stanvars = stanvar(scode=stan_funs_rounded_normal,
+                               block="functions"),
+            #stan_funs = stan_funs_rounded_normal,
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("rounding_example/mdl6.rds"))
+```
+
+```{r}
+print(mdl6)
+```
+
+```{r}
+mcmc_rank_overlay(mdl6)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl6_draws <- mdl6 %>% 
+  gather_draws(b_Intercept, b_x, sigma) %>%
+  mutate(model_id = "trunc_round")
+```
+
+# Compare Models
+
+```{r}
+# Compare model fits
+rbind(mdl1_draws, mdl2_draws,
+      mdl3_draws, mdl4_draws,
+      mdl5_draws, mdl6_draws,
+      mdl7_draws) %>%
+  group_by(.variable, model_id) %>%
+  summarize(mean = mean(.value),
+            lower = quantile(.value, probs=0.025),
+            upper = quantile(.value, probs = 0.975),
+            .groups="drop") %>%
+  mutate(model_id = fct_relevel(model_id, "true")) %>%
+  # arrange(.variable, model_id) %>%
+  # knitr::kable()
+  ggplot(aes(x=mean, xmin=lower, xmax=upper,
+             y=model_id, color=model_id),) +
+  geom_errorbarh(aes(height=0.1)) +
+  geom_point() +
+  facet_wrap(~.variable, scales="free_x") +
+  labs(x="Posterior 95% Interval") +
+  geom_vline(data = data.frame(xint=c(alpha_true, beta_true, sigma_true), 
+                               .variable=c("b_Intercept", "b_x", "sigma")),
+             aes(xintercept = xint), color="red",
+             linetype="dashed") +
+  theme(axis.text.x = element_text(angle = 45)) +
+  theme(legend.position = "none")
+```
+
+
+BLUF: We need to know whether data is rounded or truncated in order to use the correct model, otherwise the parameter estimates can be significantly biased.
+
+The red dashed lines are the true parameter values. If the data is truncated, it is crucial that the _trucated_ model is used to get a correct estimate for all the parameters. If the data is rounded, the estimates are slightly more robust to model choice.  Obviously, the _rounded_ model yields the best estimates but the _reference_ model performs nearly as well.  However, using the _truncated_ model with rounded data gives incorrect parameter estimates.  

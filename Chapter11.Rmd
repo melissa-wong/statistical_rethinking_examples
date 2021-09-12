@@ -1,0 +1,48 @@
+---
+title: "Chapter 11"
+author: "Melissa"
+date: "8/15/2021"
+output: html_document
+---
+
+# 11E1
+
+$log(0.35/0.65) = -0.619$
+
+# 11E2
+
+$\frac{exp(3.2)}{1 + exp(3.2)} = 0.968$
+
+# 11E3
+
+The odds are multiplied by $exp(1.7) = 5.474$.
+
+# 11E4
+
+An offset is used in a Poisson regression when the exposure times differ (i.e., the rate parameters are on different time scales).  The example from text is when one rate is meaured daily and the other is measured weekly.
+
+# 11M1
+
+The likelihood differs between the dis-aggregated and aggregated data in a logistic regression because the aggregated includes the constant $n \choose k$ in the binomial distribution. In the dis-aggregated data, that constant is just 1.
+
+# 11M2
+
+The expected count is multiplied by $exp(1.7) = 5.474$
+
+# 11M3
+
+The logit link is appropriate for a binomial GLM because probabilities must be between 0 and 1.
+
+# 11M4
+
+The log link is appropriate for a poisson GLM because counts must be >= 0.
+
+# 11M5
+
+The binomial and Poisson models are nearly the same as N becomes large and p is small; so if N is not large or p is not small then it would seem like a logit link function would be a reasonable alternative to the log link for a Poisson model.
+
+# 11M6
+
+The binomial distribution is maximum entropy when there are only two possible outcomes and the expected value is constant. The Poisson distribution is maximum entropy when the number of events is countable and the expected value is constant. The constraints are different but as stated in the previous problem the binomial distribution approaches the poisson distribution when the number of trials is very large and the expected value is small.
+
+
