@@ -257,7 +257,12 @@ summary(mdl3c)
 get_variables(mdl3c)
 
 # Get posterior predictions
-epred <- add_epred_draws(eagles, mdl3c)
+add_epred_draws(eagles, mdl3c) %>%
+  median_qi()
+
+add_epred_draws(eagles, mdl3c) %>%
+  median_hdi()
+
 linpred <- add_linpred_draws(eagles, mdl3c)
 preds <- add_predicted_draws(eagles, mdl3c)
 ```
