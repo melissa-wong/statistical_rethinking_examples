@@ -7,6 +7,32 @@ output:
   pdf_document: default
 ---
 
+# Description
+
+This file looks at the effects of rounding and truncation on parameter estimates for a simple linear model
+
+$$y = \alpha + x\beta$$
+
+There are three simulated data sets:
+
+1.  y_true = raw data
+
+2.  y_round = round(y_true)
+
+3.  y_trunc = trunc(y_true)
+
+Similarly there are three different models: *reference*, *rounded*, *truncated*.
+
+A total of seven fits are performed:
+
+1.  y_true with *reference* (This is the "reference" fit against which the others are compared).
+
+2-4. y_round with *reference*, *rounded*, and *truncated*
+
+5-7. y_trunc with *reference*, *rounded*, and *truncated*
+
+# Setup
+
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
 
 library(tidyverse)
@@ -94,12 +120,11 @@ mdl1_draws <- mdl1 %>%
   mutate(model_id = "reference")
 ```
 
-
 # Rounded Data
 
-## Incorrect Model
+## Incorrect Model (Reference)
 
-First, fit `y_round` data to the reference model to see effect of _not_ accounting for the rounding.
+First, fit `y_round` data to the reference model to see effect of *not* accounting for the rounding.
 
 ```{r results="hide"}
 # Fit model
@@ -110,6 +135,7 @@ mdl2 <- stan(file=here("rounding_example/y_true.stan"),
              model_name="mdl2",
              chains=4)
 ```
+
 ```{r}
 print(mdl2)
 ```
@@ -124,7 +150,7 @@ mdl2_draws <- mdl2 %>%
   gather_draws(alpha, beta, sigma) %>%
   mutate(model_id = "round_reference")
 ```
- 
+
 ## Correct Model
 
 Next, fit `y_round` data to the correct model twhich accounts for rounding.
@@ -154,11 +180,40 @@ mdl3_draws <- mdl3 %>%
   mutate(model_id = "round_round")
 ```
 
+## Incorrect Model (Truncated)
+
+First, fit `y_round` data to the truncated model to see effect of incorrect model.
+
+```{r results="hide"}
+# Fit model
+mdl7 <- stan(file=here("rounding_example/y_trunc.stan"), 
+             data=list(N = N,
+                 y = df$y_round,
+                 x = df$x), 
+             model_name="mdl7",
+             chains=4)
+```
+
+```{r}
+print(mdl7)
+```
+
+```{r}
+mcmc_rank_overlay(mdl7)
+```
+
+```{r}
+# Save posterior draws for comparison later
+mdl7_draws <- mdl7 %>% 
+  gather_draws(alpha, beta, sigma) %>%
+  mutate(model_id = "round_trunc")
+```
+
 # Truncated Data
 
 ## Incorrect Model (Reference)
 
-Fit `y_trunc` data to the reference model to see effect of _not_ accounting for the truncating.
+Fit `y_trunc` data to the reference model to see effect of *not* accounting for the truncating.
 
 ```{r results="hide"}
 # Fit model
@@ -177,7 +232,6 @@ print(mdl4)
 ```{r}
 mcmc_rank_overlay(mdl4)
 ```
-
 
 ```{r}
 # Save posterior draws for comparison later
@@ -208,7 +262,6 @@ print(mdl5)
 mcmc_rank_overlay(mdl5)
 ```
 
-
 ```{r}
 # Save posterior draws for comparison later
 mdl5_draws <- mdl5 %>% 
@@ -238,7 +291,6 @@ print(mdl6)
 mcmc_rank_overlay(mdl6)
 ```
 
-
 ```{r}
 # Save posterior draws for comparison later
 mdl6_draws <- mdl6 %>% 
@@ -246,14 +298,14 @@ mdl6_draws <- mdl6 %>%
   mutate(model_id = "trunc_round")
 ```
 
-
 # Compare Models
 
 ```{r}
 # Compare model fits
 rbind(mdl1_draws, mdl2_draws,
       mdl3_draws, mdl4_draws,
-      mdl5_draws, mdl6_draws) %>%
+      mdl5_draws, mdl6_draws,
+      mdl7_draws) %>%
   group_by(.variable, model_id) %>%
   summarize(mean = mean(.value),
             lower = quantile(.value, probs=0.025),
@@ -275,3 +327,8 @@ rbind(mdl1_draws, mdl2_draws,
   theme(axis.text.x = element_text(angle = 45)) +
   theme(legend.position = "none")
 ```
+
+
+BLUF: We need to know whether data is rounded or truncated in order to use the correct model, otherwise the parameter estimates can be significantly biased.
+
+The red dashed lines are the true parameter values. If the data is truncated, it is crucial that the _trucated_ model is used to get a correct estimate for all the parameters. If the data is rounded, the estimates are slightly more robust to model choice.  Obviously, the _rounded_ model yields the best estimates but the _reference_ model performs nearly as well.  However, using the _truncated_ model with rounded data gives incorrect parameter estimates.  

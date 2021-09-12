@@ -17,6 +17,7 @@ library(gridExtra)
 library(tidybayes)
 library(bayesplot)
 library(rstan)
+library(cmdstanr)
 library(dagitty)
 library(here)
 library(brms)
@@ -62,7 +63,8 @@ mdl1 <- brm(awards | trials(applications) ~ gender,
            family=binomial(link="logit"),
            chains=4,
            file_refit = "on_change",
-           file = here("homework/mdl6-1a.rds"))
+           file = here("homework/mdl6-1a.rds"),
+           backend="cmdstanr")
 
 #stancode(mdl)
 ```
@@ -80,7 +82,8 @@ mdl2 <- brm(awards | trials(applications) ~ gender + discipline,
            family=binomial(link="logit"),
            chains=4,
            file_refit = "on_change",
-           file = here("homework/mdl6-1b.rds"))
+           file = here("homework/mdl6-1b.rds"),
+           backend = "cmdstanr")
 
 #stancode(mdl2)
 ```
@@ -198,7 +201,8 @@ mdl3a <- brm(y | trials(n) ~ A + V,
              ),
               chains=4,
               file_refit = "on_change",
-            file = here("homework/mdl3a.rds"))
+            file = here("homework/mdl3a.rds"),
+            backend="cmdstanr")
 ```
 
 
@@ -220,7 +224,8 @@ mdl3b <- brm(y | trials(n) ~ A + V + P,
              ),
               chains=4,
               file_refit = "on_change",
-            file = here("homework/mdl3b.rds"))
+            file = here("homework/mdl3b.rds"),
+            backend="cmdstanr")
 ```
 
 
@@ -242,7 +247,8 @@ mdl3c <- brm(y | trials(n) ~ A + V * P,
              ),
              chains=4,
              file_refit = "on_change",
-             file = here("homework/mdl3c.rds"))
+             file = here("homework/mdl3c.rds"),
+             backend="cmdstanr")
 ```
 
 
@@ -252,10 +258,11 @@ plot(mdl3c, combo=c("dens", "rank_overlay"))
 summary(mdl3c)
 ```
 
-```{r include=FALSE}
+```{r include=FALSE, eval=FALSE}
 
 get_variables(mdl3c)
 
+<<<<<<< HEAD
 # Get posterior predictions
 add_epred_draws(eagles, mdl3c) %>%
   median_qi()
@@ -263,12 +270,35 @@ add_epred_draws(eagles, mdl3c) %>%
 add_epred_draws(eagles, mdl3c) %>%
   median_hdi()
 
+=======
+# expected posterior (n * p)
+epred <- add_epred_draws(eagles, mdl3c)
+# log-odds scale
+>>>>>>> 5471896e2ae325925cbf084fa57d353282fb2a93
 linpred <- add_linpred_draws(eagles, mdl3c)
+# posterior predicted (integers)
 preds <- add_predicted_draws(eagles, mdl3c)
 ```
 
 
 ## Summary
 
+```{r}
+mdl3c <- add_criterion(mdl3c, "waic")
+mdl3b <- add_criterion(mdl3b, "waic")
+mdl3a <- add_criterion(mdl3a, "waic")
+loo_compare(mdl3c, mdl3b, mdl3a, criterion = "waic")
+```
+
+Comparing the models with WAIC
 
 
+```{r}
+mdl3c <- add_criterion(mdl3c, "loo")
+mdl3b <- add_criterion(mdl3b, "loo")
+mdl3a <- add_criterion(mdl3a, "loo")
+loo_compare(mdl3c, mdl3b, mdl3a, criterion = "loo")
+```
+We can see that `mdl3b` and `mdl3c` fit the data better (unsurprising since they include additional covariates).  However, there isn't a significant different between `mdl3b` and `mdl3c`--also not surprising since the 95% credible for the interaction term in `mdl3c` is squarely centered over 0.  Based on that, I would say the interaction between pirate and victim size is negligible.
+
+The odds of success are about 1/3 for an immature pirate compared to a mature pirate, 54x greater when the victim is small vs large and about 1/36 when the pirate is small.
