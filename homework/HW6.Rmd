@@ -262,7 +262,6 @@ summary(mdl3c)
 
 get_variables(mdl3c)
 
-<<<<<<< HEAD
 # Get posterior predictions
 add_epred_draws(eagles, mdl3c) %>%
   median_qi()
@@ -270,11 +269,9 @@ add_epred_draws(eagles, mdl3c) %>%
 add_epred_draws(eagles, mdl3c) %>%
   median_hdi()
 
-=======
 # expected posterior (n * p)
 epred <- add_epred_draws(eagles, mdl3c)
 # log-odds scale
->>>>>>> 5471896e2ae325925cbf084fa57d353282fb2a93
 linpred <- add_linpred_draws(eagles, mdl3c)
 # posterior predicted (integers)
 preds <- add_predicted_draws(eagles, mdl3c)
