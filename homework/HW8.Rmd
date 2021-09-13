@@ -1,0 +1,338 @@
+---
+title: Assignment 8
+author: "Melissa Wong"
+date: \today
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(RColorBrewer)
+#library(rethinking)
+library(gridExtra)
+library(tidybayes)
+library(bayesplot)
+#library(rstan)
+library(dagitty)
+library(here)
+library(brms)
+library(cmdstanr)
+```
+
+```{r options}
+options("scipen" = 1, "digits" = 4)
+
+#knitr::opts_chunk$set(echo = FALSE)
+#knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE)
+#knitr::opts_chunk$set(out.width = "50%")
+knitr::opts_chunk$set(fig.align = "center")
+
+# Set Default ggplot palette
+options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
+options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
+
+#set_cmdstan_path(here("../.cmdstanr/cmdstan-2.27.0"))
+ncores <- min(4, parallel::detectCores()-1)
+
+# Set brms backend to cmdstanr
+#options(brms.backend="cmdstanr")
+```
+
+# Problem 1
+```{r}
+data("reedfrogs", package="rethinking")
+
+frogs <- reedfrogs %>% 
+  select(surv, density, pred, size) %>% 
+  mutate(tank = row_number())
+```
+
+## Varying Intercepts Model
+
+```{r results="hide"}
+# Varying intercepts model
+mdl1 <- brm(surv | trials(density) ~ 1 + (1 | tank),
+            prior = c(set_prior("normal(0,2)", class="Intercept"),
+                      set_prior("exponential(1)", class="sd")),
+            data=frogs,
+            family=binomial(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-1.rds")
+            )
+
+get_variables(mdl1)
+
+```
+
+```{r}
+summary(mdl1)
+
+mcmc_plot(mdl1, type="intervals",
+          pars=c("^b_", "^sd_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+```{r}
+mcmc_rank_overlay(mdl1,           
+                  regex_pars=c("^b_", "^sd_")
+                  )
+```
+```{r}
+
+# Get posterior predictions for each tank
+mdl1_draws <- add_epred_draws(frogs, mdl1) %>% 
+  median_hdi() %>% 
+  mutate(model="Intercept-Only")
+  
+```
+## Varying Intercepts Model + predation
+
+```{r results="hide"}
+# Varying intercepts model + predation
+mdl1a <- brm(surv | trials(density) ~ 1 + (1 | tank) + pred,
+            prior = c(set_prior("normal(0,2)", class="Intercept"),
+                      set_prior("exponential(1)", class="sd")),
+            data=frogs,
+            family=binomial(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-1a.rds")
+            )
+
+#get_variables(mdl1a)
+
+```
+
+```{r}
+summary(mdl1a)
+
+mcmc_plot(mdl1a, type="intervals",
+          pars=c("^b_", "^sd_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+
+```{r}
+mcmc_rank_overlay(mdl1a,           
+                  regex_pars=c("^b_", "^sd_")
+                  )
+```
+
+```{r}
+
+# Get posterior predictions for each tank
+mdl1a_draws <- add_epred_draws(frogs, mdl1a) %>% 
+  median_hdi() %>% 
+  mutate(model="Intercept+predation")
+```
+
+## Varying Intercepts Model + size
+
+```{r results="hide"}
+# Varying intercepts model + size
+mdl1b <- brm(surv | trials(density) ~ 1 + (1 | tank) + size,
+            prior = c(set_prior("normal(0,2)", class="Intercept"),
+                      set_prior("exponential(1)", class="sd")),
+            data=frogs,
+            family=binomial(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-1b.rds")
+            )
+
+#get_variables(mdl1b)
+
+```
+
+```{r}
+summary(mdl1b)
+
+mcmc_plot(mdl1b, type="intervals",
+          pars=c("^b_", "^sd_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+
+```{r}
+mcmc_rank_overlay(mdl1b,           
+                  regex_pars=c("^b_", "^sd_")
+                  )
+```
+
+```{r}
+
+# Get posterior predictions for each tank
+mdl1b_draws <- add_epred_draws(frogs, mdl1b) %>% 
+  median_hdi() %>% 
+  mutate(model="Intercept+size")
+  
+```
+
+## Varying Intercepts Model + size + predation
+
+```{r results="hide"}
+# Varying intercepts model + size * predation
+mdl1c <- brm(surv | trials(density) ~ 1 + (1 | tank) + size * pred,
+            prior = c(set_prior("normal(0,2)", class="Intercept"),
+                      set_prior("exponential(1)", class="sd")),
+            data=frogs,
+            family=binomial(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-1c.rds")
+            )
+
+# get_variables(mdl1c)
+
+```
+
+```{r}
+summary(mdl1c)
+
+mcmc_plot(mdl1, type="intervals",
+          pars=c("^b_", "^sd_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+
+```{r}
+mcmc_rank_overlay(mdl1c,           
+                  regex_pars=c("^b_", "^sd_")
+                  )
+```
+
+```{r}
+
+# Get posterior predictions for each tank
+mdl1c_draws <- add_epred_draws(frogs, mdl1c) %>% 
+  median_hdi() %>%
+  mutate(model="Intercept+size*predation")
+```
+
+```{r}
+conditional_effects(mdl1c) 
+```
+
+## Compare Models
+
+```{r}
+rbind(mdl1_draws, mdl1a_draws, mdl1b_draws, mdl1c_draws) %>% 
+  ggplot() +
+  geom_point(mapping=aes(x=tank, y=surv/density, 
+                         color="observed")) +
+  geom_point(mapping=aes(x=tank, y=.epred/density,
+                         color="posterior prediction")) +
+  facet_wrap(vars(model)) +
+  labs(y="proportion survived")
+  
+```
+
+```{r}
+mdl1a <- add_criterion(mdl1a, "waic")
+mdl1b <- add_criterion(mdl1b, "waic")
+mdl1c <- add_criterion(mdl1c, "waic")
+loo_compare(mdl1a, mdl1b, mdl1c, criterion = "waic")
+```
+
+# Problem 2
+
+```{r}
+data("bangladesh", package="rethinking")
+```
+
+# Problem 3
+ 
+```{r}
+data("Trolley", package="rethinking")
+
+df <- Trolley %>%
+  select(response, action, intention, contact, id) 
+```
+
+## Partial-Pooling (Varying-Intercept)
+
+```{r results='hide'}
+
+mdl3a <- brm(response ~  1 + (1 | id) + intention + action + contact + action:intention + contact:intention,
+           data=df,
+           family=cumulative(link="logit"),
+           chains=4,
+           cores=ncores,
+           file_refit = "on_change",
+           file = here("homework/mdl8-3a.rds")
+           )
+
+```
+
+```{r}
+summary(mdl3a)
+```
+
+```{r}
+mcmc_plot(mdl3a, type="intervals",
+          pars=c("^b_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+
+```{r}
+# Note: Intercept terms are when predictors are mean centered
+# For our purposes, we care about b_Intercept terms in the 
+# plots below
+# See https://discourse.mc-stan.org/t/b-intercept-and-intercept-how-are-they-related/12933/4 
+mcmc_rank_overlay(mdl3a, regex_pars=c("^b_", "sigma"))
+```
+
+## Complete pooling (single intercept)
+
+```{r results='hide'}
+
+mdl3b <- brm(response ~  1 + intention + action + contact + action:intention + contact:intention,
+           data=df,
+           family=cumulative(link="logit"),
+           chains=4,
+           cores=ncores,
+           file_refit = "on_change",
+           file = here("homework/mdl8-3b.rds")
+           )
+
+```
+
+```{r}
+summary(mdl3b)
+```
+
+```{r}
+mcmc_plot(mdl3b, type="intervals",
+          pars=c("^b_"),
+          prob=0.5, prob_outer=0.95,
+          point_est="median")
+```
+
+```{r}
+# Note: Intercept terms are when predictors are mean centered
+# For our purposes, we care about b_Intercept terms in the 
+# plots below
+# See https://discourse.mc-stan.org/t/b-intercept-and-intercept-how-are-they-related/12933/4 
+mcmc_rank_overlay(mdl3b, regex_pars=c("^b_", "sigma"))
+```
+
+## Compare models
+
+```{r}
+mdl3a <- add_criterion(mdl3a, "waic")
+mdl3b <- add_criterion(mdl3b, "waic")
+```
+
+
+
