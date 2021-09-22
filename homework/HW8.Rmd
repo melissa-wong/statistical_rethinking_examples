@@ -67,7 +67,7 @@ mdl1 <- brm(surv | trials(density) ~ 1 + (1 | tank),
             file = here("homework/mdl8-1.rds")
             )
 
-get_variables(mdl1)
+#get_variables(mdl1)
 
 ```
 
@@ -86,6 +86,18 @@ mcmc_rank_overlay(mdl1,
                   )
 ```
 
+
+```{r}
+mdl1 <- add_criterion(mdl1, "waic")
+print(mdl1$criteria$waic)
+```
+
+```{r}
+mdl1 <- add_criterion(mdl1, "loo")
+print(mdl1$criteria$loo)
+plot(mdl1$criteria$loo)
+```
+
 ```{r}
 
 # Get posterior predictions for each tank
@@ -94,6 +106,7 @@ mdl1_draws <- add_epred_draws(frogs, mdl1) %>%
   mutate(model="Intercept-Only")
   
 ```
+
 
 ## Varying Intercepts Model + predation
 
@@ -137,6 +150,18 @@ mdl1a_draws <- add_epred_draws(frogs, mdl1a) %>%
   mutate(model="Intercept+predation")
 ```
 
+```{r}
+mdl1a <- add_criterion(mdl1a, "waic")
+print(mdl1a$criteria$waic)
+```
+
+
+```{r}
+mdl1a <- add_criterion(mdl1a, "loo")
+print(mdl1a$criteria$loo)
+plot(mdl1a$criteria$loo)
+```
+
 ## Varying Intercepts Model + size
 
 ```{r results="hide"}
@@ -169,6 +194,18 @@ mcmc_plot(mdl1b, type="intervals",
 mcmc_rank_overlay(mdl1b,           
                   regex_pars=c("^b_", "^sd_")
                   )
+```
+
+```{r}
+mdl1b <- add_criterion(mdl1b, "waic")
+print(mdl1b$criteria$waic)
+```
+
+
+```{r}
+mdl1b <- add_criterion(mdl1b, "loo")
+print(mdl1b$criteria$loo)
+plot(mdl1b$criteria$loo)
 ```
 
 ```{r}
@@ -215,6 +252,19 @@ mcmc_rank_overlay(mdl1c,
 ```
 
 ```{r}
+mdl1c <- add_criterion(mdl1c, "waic")
+print(mdl1c$criteria$waic)
+```
+
+
+```{r}
+mdl1c <- add_criterion(mdl1c, "loo")
+print(mdl1c$criteria$loo)
+plot(mdl1c$criteria$loo)
+```
+
+
+```{r}
 
 # Get posterior predictions for each tank
 mdl1c_draws <- add_epred_draws(frogs, mdl1c) %>% 
@@ -240,12 +290,18 @@ rbind(mdl1_draws, mdl1a_draws, mdl1b_draws, mdl1c_draws) %>%
   
 ```
 
+Note: Not sure using WAIC/PSIS to compare the models makes sense in this case.  They approximate the cross-validation error, but since the data is grouped by tank, leaving out an observation in this case means leaving out an entire tank. From the paper _Practical Bayesian model evaluation using leave-one-out cross-validation and
+WAIC_, when there are many observations per group then it will not work as well and K-fold CV should be used instead. We already know the estimates aren't reliable from the warning messages when previously calculating WAIC/PSIS for each model.  But I'm going to be lazy for now and proceed following the example in the book. 
+
 ```{r}
-mdl1a <- add_criterion(mdl1a, "waic")
-mdl1b <- add_criterion(mdl1b, "waic")
-mdl1c <- add_criterion(mdl1c, "waic")
+loo_compare(mdl1a, mdl1b, mdl1c, criterion = "loo")
+```
+
+```{r}
 loo_compare(mdl1a, mdl1b, mdl1c, criterion = "waic")
 ```
+
+The standard error of the differences is greater than the differences between the three models, so adding the _size_ and _predation_ predictors doesn't significantly improve the predictive performance. The 95% posterior credible intervals for the coefficients of _size_ and _size_:_predation_ both include zero which adds further justification for not adding them to the model.  However, if I had a scientific basis for including _predation_ in the model then I would keep it in the model since the 95% credible interval is clearly negative.
 
 # Problem 2
 
@@ -332,10 +388,10 @@ df_summary <- df %>%
 
 rbind(mdl2a_draws, mdl2b_draws) %>% 
   ggplot() +
-  geom_point(data=df_summary, mapping=aes(x=district, y=prop)) +
   geom_pointrange(mapping=aes(x=district, y=.epred,
                               ymin=.lower, ymax=.upper, 
                               color=model)) +
+  geom_point(data=df_summary, mapping=aes(x=district, y=prop)) +
   facet_wrap(vars(model)) +
   theme(axis.text.x = element_text(angle = 90)) 
   
