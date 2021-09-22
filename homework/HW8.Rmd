@@ -36,11 +36,11 @@ knitr::opts_chunk$set(fig.align = "center")
 options(ggplot2.discrete.color=brewer.pal(8, "Dark2"))
 options(ggplot2.discrete.fill=brewer.pal(8, "Dark2"))
 
-#set_cmdstan_path(here("../.cmdstanr/cmdstan-2.27.0"))
+set_cmdstan_path(here("../.cmdstanr/cmdstan-2.27.0"))
 ncores <- min(4, parallel::detectCores()-1)
 
 # Set brms backend to cmdstanr
-#options(brms.backend="cmdstanr")
+options(brms.backend="cmdstanr")
 ```
 
 # Problem 1
@@ -79,11 +79,13 @@ mcmc_plot(mdl1, type="intervals",
           prob=0.5, prob_outer=0.95,
           point_est="median")
 ```
+
 ```{r}
 mcmc_rank_overlay(mdl1,           
                   regex_pars=c("^b_", "^sd_")
                   )
 ```
+
 ```{r}
 
 # Get posterior predictions for each tank
@@ -92,6 +94,7 @@ mdl1_draws <- add_epred_draws(frogs, mdl1) %>%
   mutate(model="Intercept-Only")
   
 ```
+
 ## Varying Intercepts Model + predation
 
 ```{r results="hide"}
@@ -199,7 +202,7 @@ mdl1c <- brm(surv | trials(density) ~ 1 + (1 | tank) + size * pred,
 ```{r}
 summary(mdl1c)
 
-mcmc_plot(mdl1, type="intervals",
+mcmc_plot(mdl1c, type="intervals",
           pars=c("^b_", "^sd_"),
           prob=0.5, prob_outer=0.95,
           point_est="median")
@@ -248,7 +251,97 @@ loo_compare(mdl1a, mdl1b, mdl1c, criterion = "waic")
 
 ```{r}
 data("bangladesh", package="rethinking")
+
+df <- bangladesh %>%
+  select(woman, district, use.contraception) %>% 
+  mutate(district = as.factor(district))
 ```
+
+
+## Fixed Effects Model
+```{r results="hide"}
+mdl2a <- brm(use.contraception ~ 0 + district,
+            prior = c(set_prior("normal(0,2)", class="b")),
+            data=df,
+            family=bernoulli(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-2a.rds")
+)
+```
+```{r}
+summary(mdl2a)
+```
+
+```{r}
+mcmc_rank_overlay(mdl2a)
+```
+
+```{r}
+# Get posterior predictions for each tank
+mdl2a_draws <- add_epred_draws(newdata=data.frame(district=unique(df$district)),
+                               mdl2a) %>% 
+  median_hdi() %>% 
+  mutate(model="Fixed Effects")
+```
+
+
+## Varying Intercepts Model
+
+```{r}
+mdl2b <- brm(use.contraception ~ 1 + ( 1 | district),
+            prior = c(set_prior("normal(0,2)", class="Intercept"),
+                      set_prior("normal(0,2)", class="sd")),
+            data=df,
+            family=bernoulli(link="logit"),
+            chains=4,
+            cores=ncores,
+            file_refit = "on_change",
+            file = here("homework/mdl8-2b.rds")
+)
+```
+
+```{r}
+summary(mdl2b)
+```
+
+
+```{r}
+mcmc_rank_overlay(mdl2b, 
+                  regex_pars=c("^b_", "^sd_")
+                  )
+```
+
+
+```{r}
+# Get posterior predictions for each tank
+mdl2b_draws <- add_epred_draws(newdata=data.frame(district=unique(df$district)),
+                               mdl2b) %>% 
+  median_hdi() %>% 
+  mutate(model="Varying Intercept")
+```
+
+## Compare Models
+
+```{r}
+df_summary <- df %>% 
+  group_by(district) %>% 
+  summarize(prop = sum(use.contraception)/n(),
+            size = n())
+
+rbind(mdl2a_draws, mdl2b_draws) %>% 
+  ggplot() +
+  geom_point(data=df_summary, mapping=aes(x=district, y=prop)) +
+  geom_pointrange(mapping=aes(x=district, y=.epred,
+                              ymin=.lower, ymax=.upper, 
+                              color=model)) +
+  facet_wrap(vars(model)) +
+  theme(axis.text.x = element_text(angle = 90)) 
+  
+```
+
+The varying intercept clearly "shrinks" the estimates toward the group mean.  It's most noticeable for districts 3, 10, 11, 24 and 49, which have proportions close to the extremes (0 or 1) and a small number of observations.
 
 # Problem 3
  
@@ -257,7 +350,10 @@ data("Trolley", package="rethinking")
 
 df <- Trolley %>%
   select(response, action, intention, contact, id) 
+
 ```
+
+
 
 ## Partial-Pooling (Varying-Intercept)
 
