@@ -162,29 +162,68 @@ print(mdl1a$criteria$loo)
 plot(mdl1a$criteria$loo)
 ```
 
+### Sidebar - conditional_effects
 
-```{r include=FALSE, eval=FALSE}
-
-samples <- add_epred_draws(newdata=data.frame(pred=unique(frogs$pred),
-                                   tank=1,
-                                   density=1), 
-                           mdl1a) 
+```{r}
+# Include group-level effects
+samples <- add_epred_draws(newdata=data.frame(pred=frogs$pred,
+                                   tank=frogs$tank,
+                                   density=1),
+                           re_formula=NULL,
+                           mdl1a)
 
 samples %>% 
-  ggplot() +
-  geom_density(mapping=aes(x=.epred)) +
-  facet_wrap(~pred)
+  group_by(pred) %>% 
+  # Marginalize over tanks
+  summarize(est = median(.epred),
+            lwr= quantile(.epred, 0.025),
+            upr = quantile(.epred, 0.975)) %>% 
+  ggplot(mapping=aes(x=pred)) +
+  geom_errorbar(aes(ymin=lwr, ymax=upr), width=0.5) +
+  geom_point(aes(y=est)) 
+
+p2 <- plot(conditional_effects(mdl1a, re_formula=NULL),
+     ask=FALSE)
+
+samples %>% 
+  group_by(pred) %>% 
+  summarize(est = median(.epred),
+            lwr= quantile(.epred, 0.025),
+            upr = quantile(.epred, 0.975))
+
+p2$pred$data
+
+```
+
+
+```{r}
+
+# Exclude group-level effects
+
+samples <- add_epred_draws(newdata=data.frame(pred=frogs$pred,
+                                   density=1),
+                           re_formula = NA,
+                           mdl1a)
 
 samples %>% 
   group_by(pred) %>% 
   summarize(est = median(.epred),
             lwr= quantile(.epred, 0.025),
             upr = quantile(.epred, 0.975)) %>% 
-  ggplot() +
-  geom_pointrange(aes(x=pred, y=est, ymin=lwr, ymax=upr)) +
-  labs(title="Conditional Effect (tank=1, reference category)")
+  ggplot(mapping=aes(x=pred)) +
+  geom_errorbar(aes(ymin=lwr, ymax=upr), width=0.5) +
+  geom_point(aes(y=est)) 
 
-conditional_effects(mdl1a)
+p1 <- plot(conditional_effects(mdl1a, re_formula = NA),
+           ask=FALSE)
+
+samples %>% 
+  group_by(pred) %>% 
+  summarize(est = median(.epred),
+            lwr= quantile(.epred, 0.025),
+            upr = quantile(.epred, 0.975)) 
+
+p1$pred$data
 ```
 
 ## Varying Intercepts Model + size
@@ -298,7 +337,8 @@ mdl1c_draws <- add_epred_draws(frogs, mdl1c) %>%
 ```
 
 ```{r}
-conditional_effects(mdl1c) 
+plot(conditional_effects(mdl1c), 
+     ask=FALSE)
 ```
 
 ## Compare Models
@@ -340,6 +380,7 @@ df <- bangladesh %>%
 
 
 ## Fixed Effects Model
+
 ```{r results="hide"}
 mdl2a <- brm(use.contraception ~ 0 + district,
             prior = c(set_prior("normal(0,2)", class="b")),
@@ -351,6 +392,7 @@ mdl2a <- brm(use.contraception ~ 0 + district,
             file = here("homework/mdl8-2a.rds")
 )
 ```
+
 ```{r}
 summary(mdl2a)
 ```
@@ -479,21 +521,21 @@ print(mdl3a$criteria$waic)
 mdl3a <- add_criterion(mdl3a, "loo")
 print(mdl3a$criteria$loo)
 plot(mdl3a$criteria$loo)
-## Complete pooling (single intercept)
 ```
 
-```{r}
-# Get posterior predictions for each tank
+```{r include=FALSE, eval=FALSE}
 mdl3a_draws <- add_epred_draws(newdata = expand.grid(action=unique(df$action),
                                                      intention=unique(df$intention),
-                                                     contact=unique(df$contact)),
+                                                     contact=unique(df$contact),
+                                                     id=unique(df$id)),
                                mdl3a) %>% 
   median_hdi() %>% 
   mutate(model="Varying Intercept")
 ```
 
 ```{r}
-conditional_effects(mdl3a, categorical = TRUE)
+plot(conditional_effects(mdl3a, categorical = TRUE),
+     ask=FALSE)
 ```
 
 ## Fixed Effects Model
@@ -542,7 +584,6 @@ print(mdl3b$criteria$loo)
 ```
 
 ```{r eval=FALSE}
-# Get posterior predictions for each tank
 mdl3b_draws <- add_epred_draws(newdata = expand.grid(action=unique(df$action),
                                                      intention=unique(df$intention),
                                                      contact=unique(df$contact)),
@@ -552,7 +593,6 @@ mdl3b_draws <- add_epred_draws(newdata = expand.grid(action=unique(df$action),
 ```
 
 ## Compare models
-
 
 ```{r}
 loo_compare(mdl3a, mdl3b, criterion = "loo")
