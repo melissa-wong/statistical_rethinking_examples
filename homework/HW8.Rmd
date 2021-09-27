@@ -171,11 +171,6 @@ samples <- add_epred_draws(newdata=data.frame(pred=unique(frogs$pred),
                            mdl1a) 
 
 samples %>% 
-  ggplot() +
-  geom_density(mapping=aes(x=.epred)) +
-  facet_wrap(~pred)
-
-samples %>% 
   group_by(pred) %>% 
   summarize(est = median(.epred),
             lwr= quantile(.epred, 0.025),
@@ -184,7 +179,7 @@ samples %>%
   geom_pointrange(aes(x=pred, y=est, ymin=lwr, ymax=upr)) +
   labs(title="Conditional Effect (tank=1, reference category)")
 
-conditional_effects(mdl1a)
+conditional_effects(mdl1a) 
 ```
 
 ## Varying Intercepts Model + size
