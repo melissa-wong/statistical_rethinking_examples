@@ -3,9 +3,9 @@ title: Assignment 8
 author: "Melissa Wong"
 date: \today
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
@@ -604,4 +604,5 @@ loo_compare(mdl3a, mdl3b, criterion = "loo")
 loo_compare(mdl3a, mdl3b,  criterion = "waic")
 ```
 
+The fixed effects model has greater cross-validation error, so it overfits the data. The varying intercept model, unsurprisingly, has better predictive performance.
 
