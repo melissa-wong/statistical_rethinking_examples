@@ -164,6 +164,8 @@ plot(mdl1a$criteria$loo)
 
 ### Sidebar - conditional_effects
 
+NOTE: `add_epred_draws` defaults to _including_ group effects vs. `conditional_effects` defaults to _excluding_ group effects.
+
 ```{r}
 # Include group-level effects
 samples <- add_epred_draws(newdata=data.frame(pred=frogs$pred,
